@@ -75,7 +75,9 @@ export async function PATCH(req: NextRequest) {
 
     // THE CORE LOGIC: Regenerate passId only if the category has changed.
     if (existingPass.category !== validatedData.category) {
-      patchPayload.passId = await getNextPassId(validatedData.category);
+      // Fix: Pass both category and year as string as required by getNextPassId
+      const currentYear = new Date().getFullYear().toString();
+      patchPayload.passId = await getNextPassId(validatedData.category, currentYear);
     }
 
     const photo = formData.get('photo') as File | null;

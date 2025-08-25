@@ -12,17 +12,30 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // --- DEFINE YOUR PUBLIC PATHS (accessible without authentication) ---
+  // Only logged-out users can access these paths (home page only)
   const publicPaths = [
-    '/cargo-id',   
-    '/landside-id', 
-    '/',            
+    '/',            // Home page for logged-out users
   ];
 
   // --- CHECK IF THE PATH IS PUBLIC ---
-  const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+  const isPublicPath = publicPaths.some(path => pathname === path || (path === '/' && pathname === '/'));
 
-  if (isPublicPath) {
+  if (isPublicPath && !token) {
+    // Allow access to public paths only if user is NOT logged in
     return NextResponse.next();
+  }
+
+  if (isPublicPath && token) {
+    // If user is logged in and tries to access public paths, redirect based on their role
+    const userRole = token.role as string;
+    
+    if (userRole === 'admin') {
+      return NextResponse.redirect(new URL('/admin', req.url));
+    } else if (userRole === 'editor') {
+      return NextResponse.redirect(new URL('/add-pass', req.url));
+    } else if (userRole === 'viewer') {
+      return NextResponse.redirect(new URL('/cargo-id', req.url)); // or any default viewer page
+    }
   }
 
   // --- CHECK IF THE USER IS LOGGED IN ---
@@ -39,89 +52,131 @@ export async function middleware(req: NextRequest) {
 
   const userRole = token.role as string;
 
+  // --- ADMIN FULL ACCESS ---
+  // Admins have access to everything
+  if (userRole === 'admin') {
+    return NextResponse.next();
+  }
+
+  // --- VIEWER ROLE ACCESS ---
+  // Viewers can ONLY access cargo-id/[id]/[year] and landside-id/[id]/[year] pages
+  if (userRole === 'viewer') {
+    const viewerAllowedPaths = [
+      '/cargo-id',    // Matches /cargo-id/[id]/[year]
+      '/landside-id', // Matches /landside-id/[id]/[year]
+      '/profile',     // Allow profile access
+      '/unauthorized' // Allow unauthorized page access
+    ];
+
+    // Check if the current path starts with any of the allowed viewer paths
+    const isViewerAllowedPath = viewerAllowedPaths.some(path => pathname.startsWith(path));
+    
+    if (!isViewerAllowedPath) {
+      const url = new URL('/unauthorized', req.url);
+      return NextResponse.redirect(url);
+    }
+
+    // Additional check to ensure viewer is accessing the correct dynamic route format
+    // cargo-id/[id]/[year] or landside-id/[id]/[year]
+    const cargoIdPattern = /^\/cargo-id\/\d+\/\d{4}$/;
+    const landsideIdPattern = /^\/landside-id\/\d+\/\d{4}$/;
+    const profilePattern = /^\/profile/;
+    const unauthorizedPattern = /^\/unauthorized/;
+
+    const isValidViewerPath = cargoIdPattern.test(pathname) || 
+                             landsideIdPattern.test(pathname) || 
+                             profilePattern.test(pathname) || 
+                             unauthorizedPattern.test(pathname) ||
+                             pathname === '/cargo-id' ||
+                             pathname === '/landside-id';
+
+    if (!isValidViewerPath) {
+      const url = new URL('/unauthorized', req.url);
+      return NextResponse.redirect(url);
+    }
+
+    return NextResponse.next();
+  }
+
+  // --- EDITOR ROLE ACCESS ---
+  // Editors can add pass, view/edit database (but cannot delete)
+  if (userRole === 'editor') {
+    const editorAllowedPaths = [
+      '/add-pass',
+      '/database',
+      '/profile',
+      '/dashboard',
+      '/unauthorized'
+    ];
+
+    // Check if editor is trying to access delete functionality
+    const deleteRestrictedPaths = [
+      '/api/delete',
+      '/delete',
+      '/api/remove',
+      '/remove'
+    ];
+
+    const isDeletePath = deleteRestrictedPaths.some(path => pathname.includes(path));
+    if (isDeletePath) {
+      const url = new URL('/unauthorized', req.url);
+      return NextResponse.redirect(url);
+    }
+
+    // Check if editor is accessing allowed paths
+    const isEditorAllowedPath = editorAllowedPaths.some(path => pathname.startsWith(path));
+    
+    if (!isEditorAllowedPath) {
+      const url = new URL('/unauthorized', req.url);
+      return NextResponse.redirect(url);
+    }
+
+    return NextResponse.next();
+  }
+
   // --- SANITY STUDIO SPECIFIC ACCESS CONTROL ---
-  // Check for Sanity Studio access first (more specific than general admin check)
-  if (pathname.startsWith('/studio') || pathname.startsWith('/admin/studio') || pathname.startsWith('/cms') || pathname.startsWith('/sanity')) {
-    // Only allow admin or specific CMS editors to access Sanity Studio
-    if (!['admin', 'cms-editor', 'content-manager'].includes(userRole)) {
+  // Only admins can access CMS/Sanity Studio
+  if (pathname.startsWith('/studio') || 
+      pathname.startsWith('/admin/studio') || 
+      pathname.startsWith('/cms') || 
+      pathname.startsWith('/sanity')) {
+    
+    if (userRole !== 'admin') {
       const url = new URL('/unauthorized', req.url);
       return NextResponse.redirect(url);
     }
     return NextResponse.next();
   }
 
-  // --- ADMIN FULL ACCESS ---
-  // Admins have access to everything (except Sanity Studio which is handled above)
-  if (userRole === 'admin') {
-    return NextResponse.next();
-  }
-
-  // --- USER RESTRICTED ACCESS ---
-  // Regular users can only access add-pass and database (no delete functionality)
-  
-  // 1. Define paths that users can access
-  const userAllowedPaths = [
-    '/add-pass',
-    '/database',
-    '/profile',        // Allow profile access
-    '/dashboard',      // Allow dashboard access if you have one
-    '/unauthorized'    // Allow unauthorized page access
-  ];
-
-  // 2. Define paths that contain delete functionality (admin only)
-  const deleteRestrictedPaths = [
-    '/api/delete',
-    '/delete',
-    '/api/remove',
-    '/remove'
-  ];
-
-  // 3. Define admin-only paths (INCLUDING SANITY STUDIO)
+  // --- ADMIN-ONLY PATHS ---
   const adminOnlyPaths = [
     '/admin',
     '/settings',
     '/user-management',
     '/reports',
     '/analytics',
-    '/studio',         // Add your Sanity Studio path here
-    '/admin/studio',   // If your studio is at /admin/studio
-    '/cms',           // Alternative common CMS path
-    '/sanity'         // Alternative Sanity path
+    '/studio',
+    '/admin/studio',
+    '/cms',
+    '/sanity'
   ];
 
-  // 4. Check if user is trying to access delete functionality
-  const isDeletePath = deleteRestrictedPaths.some(path => pathname.startsWith(path));
-  if (isDeletePath && userRole !== 'admin') {
-    const url = new URL('/unauthorized', req.url);
-    return NextResponse.redirect(url);
-  }
-
-  // 5. Check if user is trying to access admin-only paths (INCLUDING SANITY STUDIO)
   const isAdminPath = adminOnlyPaths.some(path => pathname.startsWith(path));
   if (isAdminPath && userRole !== 'admin') {
     const url = new URL('/unauthorized', req.url);
     return NextResponse.redirect(url);
   }
 
-  // 6. For non-admin users, check if they're accessing allowed paths
-  if (userRole === 'user' || userRole === 'editor' || userRole === 'cms-editor' || userRole === 'content-manager') {
-    const isAllowedPath = userAllowedPaths.some(path => pathname.startsWith(path));
-    
-    if (!isAllowedPath) {
-      // If user is trying to access a path not in their allowed list, redirect
-      const url = new URL('/unauthorized', req.url);
-      return NextResponse.redirect(url);
-    }
-  }
-
-  // 7. If user role is not recognized, redirect to unauthorized
-  if (!['admin', 'user', 'editor', 'cms-editor', 'content-manager'].includes(userRole)) {
+  // --- HANDLE UNRECOGNIZED ROLES ---
+  if (!['admin', 'editor', 'viewer'].includes(userRole)) {
     const url = new URL('/unauthorized', req.url);
     return NextResponse.redirect(url);
   }
 
-  // If all checks pass, allow the user to proceed to their requested page.
-  return NextResponse.next();
+  // --- FALLBACK: REDIRECT TO UNAUTHORIZED FOR ANY OTHER PATHS ---
+  // If none of the above conditions are met, redirect to unauthorized
+  const url = new URL('/unauthorized', req.url);
+  return NextResponse.redirect(url);
 }
 
 // --- CONFIGURE WHICH PATHS THE MIDDLEWARE RUNS ON ---

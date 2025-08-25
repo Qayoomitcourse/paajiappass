@@ -4,101 +4,199 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/lib/auth";
 import { z } from 'zod';
-import { writeClient as client } from '@/sanity/lib/client';
-import { PassCategory } from '@/app/types';
+import { writeClient } from '@/sanity/lib/client';
 import { getNextPassId } from '../passes/logic';
+import { EmployeePass } from '@/app/types';
 
+// Updated schema to match the new field structure
 const bulkPassSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  category: z.preprocess(
-    (arg) => (typeof arg === 'string' ? arg.trim().toLowerCase() : arg),
-    z.enum(['cargo', 'landside'], { errorMap: () => ({ message: "Category must be 'cargo' or 'landside'."}) })
-  ),
-  designation: z.string().min(1, "Designation is required"),
-  organization: z.string().min(1, "Organization is required"),
-  cnic: z.string().regex(/^\d{5}-\d{7}-\d{1}$/, "Invalid CNIC format."),
-  areaAllowed: z.string().optional(),
-  dateOfEntry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid Date of Entry format."),
-  dateOfExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid Date of Expiry format."),
+  // Personal Details
+  name: z.string().min(3, "Name must be at least 3 characters."),
+  fatherName: z.string().optional(),
+  idNumber: z.string().min(1, "ID Number is required."), // Updated from cnic
+  dateOfBirth: z.string().optional(),
+  placeOfBirth: z.string().optional(),
+  nationality: z.string().optional(),
+  
+  // Contact Details
+  mobileNumber: z.string().optional(),
+  permanentAddress: z.string().optional(),
+  presentAddress: z.string().optional(),
+  
+  // Employment Details
+  designation: z.string().min(2, "Designation is required."),
+  organization: z.string().min(2, "Organization is required."),
+
+  // Pass Specifics
+  category: z.enum(['cargo', 'landside']),
+  areaAllowed: z.string().transform((str) => {
+    // Handle both comma-separated strings and arrays
+    if (typeof str === 'string') {
+      return str.split(',').map(area => area.trim()).filter(Boolean);
+    }
+    return [];
+  }).pipe(z.array(z.string()).min(1, "At least one area must be selected.")),
+  dateOfEntry: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid entry date."),
+  dateOfExpiry: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid expiry date."),
+
+  // Security
+  securityClearance: z.string().optional(),
 });
 
-type IncomingPassData = z.infer<typeof bulkPassSchema>;
-type PassWithRow = IncomingPassData & { originalRow: number };
+interface ImportResult {
+  row: number;
+  status: 'Success' | 'Error';
+  message: string | object;
+  passId?: number;
+  name?: string;
+}
+
+
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   try {
-    const { passes } = (await req.json()) as { passes: Partial<IncomingPassData>[] };
+    const { passes } = await req.json();
+
     if (!Array.isArray(passes) || passes.length === 0) {
-      return NextResponse.json({ error: 'No pass data provided.' }, { status: 400 });
+      return NextResponse.json({ 
+        error: "Invalid request. Expected an array of passes." 
+      }, { status: 400 });
     }
 
-    const results = [];
-    const transaction = client.transaction();
-    const existingCnics = await client.fetch<string[]>('*[_type == "employeePass"].cnic');
-    const cnicSet = new Set<string>(existingCnics);
+    const results: ImportResult[] = [];
+    let successCount = 0;
+    let errorCount = 0;
 
-    const passesByCategory = passes.reduce((acc, pass, index) => {
-      const category = pass.category;
-      if (category === 'cargo' || category === 'landside') {
-        if (!acc[category]) acc[category] = [];
-        acc[category].push({ ...(pass as IncomingPassData), originalRow: index + 2 });
-      }
-      return acc;
-    }, {} as Record<PassCategory, PassWithRow[]>);
+    // Process each pass individually
+    for (let i = 0; i < passes.length; i++) {
+      const rowNumber = i + 2; // +2 because Excel starts from row 1 and we skip header
+      const passData = passes[i];
 
-    for (const category of Object.keys(passesByCategory) as PassCategory[]) {
-      const passBatch = passesByCategory[category];
-      let nextId = await getNextPassId(category);
-      for (const passData of passBatch) {
-        const validation = bulkPassSchema.safeParse(passData);
-        if (!validation.success) {
-          results.push({ row: passData.originalRow, status: 'Error', message: validation.error.flatten().fieldErrors });
+      try {
+        // Validate the pass data
+        const validationResult = bulkPassSchema.safeParse({
+          ...passData,
+          nationality: passData.nationality || 'Pakistani',
+          securityClearance: passData.securityClearance || 'na',
+        });
+
+        if (!validationResult.success) {
+          results.push({
+            row: rowNumber,
+            status: 'Error',
+            message: validationResult.error.flatten().fieldErrors,
+          });
+          errorCount++;
           continue;
         }
-        if (cnicSet.has(validation.data.cnic)) {
-          results.push({ row: passData.originalRow, status: 'Error', message: `CNIC ${validation.data.cnic} already exists.` });
+
+        const validatedData = validationResult.data;
+
+        // Check for existing passes with overlapping dates for the same ID
+        const existingPasses = await writeClient.fetch<EmployeePass[]>(
+          `*[_type == "employeePass" && idNumber == $idNumber]`,
+          { idNumber: validatedData.idNumber }
+        );
+
+        const newEntryDate = new Date(validatedData.dateOfEntry);
+        const newExpiryDate = new Date(validatedData.dateOfExpiry);
+        
+        const hasOverlap = existingPasses.some(pass => {
+          if (!pass.dateOfEntry || !pass.dateOfExpiry) return false;
+          const existingEntryDate = new Date(pass.dateOfEntry);
+          const existingExpiryDate = new Date(pass.dateOfExpiry);
+          return newEntryDate <= existingExpiryDate && newExpiryDate >= existingEntryDate;
+        });
+
+        if (hasOverlap) {
+          results.push({
+            row: rowNumber,
+            status: 'Error',
+            message: `A pass for ID ${validatedData.idNumber} already exists for an overlapping time period.`,
+            name: validatedData.name,
+          });
+          errorCount++;
           continue;
         }
-        cnicSet.add(validation.data.cnic);
 
+        // Generate new pass ID
+        const passYear = new Date(validatedData.dateOfEntry).getFullYear().toString();
+        const newPassId = await getNextPassId(validatedData.category, passYear);
+
+        // Double-check for race condition
+        const existingPassId = await writeClient.fetch(
+          `*[_type == "employeePass" && category == $category && passId == $passId && string::startsWith(dateOfEntry, $year)][0]._id`,
+          { 
+            category: validatedData.category, 
+            passId: newPassId, 
+            year: passYear 
+          }
+        );
+
+        if (existingPassId) {
+          results.push({
+            row: rowNumber,
+            status: 'Error',
+            message: `Race condition detected for pass ID ${newPassId}. Please retry this row.`,
+            name: validatedData.name,
+          });
+          errorCount++;
+          continue;
+        }
+
+        // Create the pass document
         const passDocument = {
           _type: 'employeePass',
-          ...validation.data,
-          passId: nextId,
-          areaAllowed: validation.data.areaAllowed?.split(',').map(s => s.trim()).filter(Boolean) ?? [],
+          ...validatedData,
+          passId: newPassId,
           author: { _type: 'reference', _ref: session.user.id },
+          // No photo for bulk import - can be added later if needed
         };
-        
-        transaction.create(passDocument);
-        results.push({ row: passData.originalRow, status: 'Success', message: 'Prepared for creation.', passId: nextId });
-        nextId++;
+
+        // Fix: Remove unused variable by using the creation result
+        await writeClient.create(passDocument);
+
+        results.push({
+          row: rowNumber,
+          status: 'Success',
+          message: `Pass created successfully for ${validatedData.name}`,
+          passId: newPassId,
+          name: validatedData.name,
+        });
+        successCount++;
+
+      } catch (error: unknown) {
+        console.error(`Error processing row ${rowNumber}:`, error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred during pass creation.";
+        results.push({
+          row: rowNumber,
+          status: 'Error',
+          message: errorMessage,
+          name: passData.name || 'Unknown',
+        });
+        errorCount++;
       }
     }
 
-    // *** THE FIX IS HERE ***
-    // First, count how many successful operations we prepared.
-    const successCount = results.filter(r => r.status === 'Success').length;
-    
-    // Only commit the transaction if there are successful operations to perform.
-    if (successCount > 0) {
-      await transaction.commit();
-    }
-    // *** END OF FIX ***
-    
-    // Now, return the response using the count we already calculated.
-    return NextResponse.json({
-      message: `Processing complete. ${successCount} successful, ${results.length - successCount} failed.`,
-      results
-    });
+    // Return comprehensive results
+    return NextResponse.json({ 
+      message: `Bulk import completed. ${successCount} passes created successfully, ${errorCount} failed.`,
+      summary: {
+        total: passes.length,
+        successful: successCount,
+        failed: errorCount,
+      },
+      results 
+    }, { status: 200 });
 
-  } catch (error) {
-    console.error('Bulk add error:', error);
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+  } catch (error: unknown) {
+    console.error("Error in /api/bulk-add-passes:", error);
+    const errorMessage = error instanceof Error ? error.message : "An internal server error occurred.";
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

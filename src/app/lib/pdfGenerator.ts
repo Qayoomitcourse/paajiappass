@@ -16,13 +16,12 @@ export async function generatePassesPDF(passes: EmployeePass[]) {
   autoTable(doc, {
     head: [['Pass ID', 'Name', 'Designation', 'Organization', 'CNIC', 'Expiry']],
     body: passes.map((pass) => [
-      pass.passId,
-      pass.name,
-      pass.designation,
-      pass.organization,
-      pass.cnic,
-     pass.dateOfExpiry ? format(new Date(pass.dateOfExpiry), 'dd-MM-yyyy') : 'N/A'
-     
+      pass.passId || 'N/A',
+      pass.name || 'N/A',
+      pass.designation || 'N/A',
+      pass.organization || 'N/A',
+      pass.cnic || 'N/A',
+      pass.dateOfExpiry ? format(new Date(pass.dateOfExpiry), 'dd-MM-yyyy') : 'N/A'
     ]),
     startY: 20,
   });

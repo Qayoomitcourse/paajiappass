@@ -1,8 +1,10 @@
+// /app/database/page.tsx
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback, ChangeEvent, useRef } from 'react';
 import { urlFor } from '@/sanity/lib/image';
-import { EmployeePass as BaseEmployeePass, PassCategory } from '@/app/types';
+import { EmployeePass, PassCategory } from '@/app/types';
 import Image from 'next/image';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -10,141 +12,151 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import type { SanityImageSource } from '@sanity/image-url/lib/types/types';
 
-// --- TYPE DEFINITIONS & HELPERS ---
 const PLACEHOLDER_AVATAR_URL = '/placeholder-avatar.png';
-type EmployeePass = BaseEmployeePass & { _createdAt?: string; author?: { _ref?: string; name?: string; }; };
 type DeleteState = { isDeleting: boolean; deletingId: string | null; };
 type SortOrder = 'createdAt_desc' | 'passId_asc' | 'passId_desc' | 'name_asc' | 'expiry_asc';
 
-function getImageUrl(photo: string | SanityImageSource | null | undefined): string {
-  if (!photo || (typeof photo === 'object' && !('asset' in photo))) return PLACEHOLDER_AVATAR_URL;
-  try {
-    return urlFor(photo).width(40).height(40).fit('crop').url();
-  } catch {
+// --- THIS IS THE CRASH-PROOF FIX ---
+function getImageUrl(photo: SanityImageSource | null | undefined): string {
+  // 1. If photo is null, undefined, or an object without a valid 'asset', return the placeholder immediately.
+  if (!photo || typeof photo !== 'object' || !('asset' in photo) || !photo.asset) {
     return PLACEHOLDER_AVATAR_URL;
+  }
+  // 2. Only if it's a valid-looking object, try to build the URL.
+  try { 
+    const url = urlFor(photo).width(40).height(40).fit('crop').url();
+    // 3. Final check: if the builder somehow returns null or an empty string, use the placeholder.
+    return url || PLACEHOLDER_AVATAR_URL;
+  } 
+  catch { 
+    return PLACEHOLDER_AVATAR_URL; 
   }
 }
 
-// Function to get high-resolution image URL for downloads
-function getHighResImageUrl(photo: string | SanityImageSource | null | undefined): string {
-  if (!photo || (typeof photo === 'object' && !('asset' in photo))) return PLACEHOLDER_AVATAR_URL;
-  try {
-    return urlFor(photo).width(800).height(800).fit('crop').url();
-  } catch {
-    return PLACEHOLDER_AVATAR_URL;
-  }
-}
-
-const formatTablePassId = (pid: string | number | null | undefined): string => String(pid || '0').padStart(4, '0');
+const formatTablePassId = (pid: number | null | undefined): string => String(pid || '0').padStart(4, '0');
 
 function formatDateSafely(dateString: string | null | undefined): string {
   if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return 'Invalid Date';
-  try {
-    return format(date, 'dd-MM-yyyy');
-  } catch  {
-    return 'Format Error';
-  }
+  try { return format(new Date(dateString), 'dd-MM-yyyy'); } 
+  catch { return 'Invalid Date'; }
 }
 
-// --- HELPER COMPONENTS ---
-function ActionsCell({ pass, onDelete, deleteState }: { pass: EmployeePass; onDelete: (passId: string, passName: string) => Promise<void>; deleteState: DeleteState; }) {
-  const { data: session } = useSession();
-  const canDelete = session?.user?.role === 'admin' || session?.user?.id === pass.author?._ref;
-  const isCurrentlyDeleting = deleteState.isDeleting && deleteState.deletingId === pass._id;
-  const viewId = String(pass.passId || pass._id);
+// Helper function to get ID number from either new or old field
+function getIdNumber(pass: EmployeePass): string {
+  // Check for the new field first, then fall back to the old CNIC field
+  // by safely casting to a type that includes the optional 'cnic' property.
+  return pass.idNumber || (pass as { cnic?: string }).cnic || 'N/A';
+}
+
+function MultiLineCell({ text }: { text: string | undefined | null }) {
+  if (!text) return <span className="text-gray-400">N/A</span>;
   return (
-    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-      <div className="flex items-center space-x-2">
-        <Link href={pass.category === 'cargo' ? `/cargo-id/${viewId}` : `/landside-id/${viewId}`} className="text-indigo-600 hover:text-indigo-800">View</Link>
-        <Link href={`/add-pass?edit=${pass._id}`} className="text-green-600 hover:text-green-800">Edit</Link>
-        {canDelete && (
-          <button onClick={() => onDelete(pass._id, pass.name)} disabled={deleteState.isDeleting} className={`text-red-600 hover:text-red-800 disabled:opacity-50 ${isCurrentlyDeleting ? 'animate-pulse' : ''}`}>
-            {isCurrentlyDeleting ? 'Deleting...' : 'Delete'}
-          </button>
-        )}
-      </div>
-    </td>
+    <div className="max-w-xs">
+      {text.split('\n').map((line, index) => (
+        <div key={index} className="text-sm leading-tight">
+          {line || '\u00A0'}
+        </div>
+      ))}
+    </div>
   );
 }
 
-// Enhanced Photo Cell with Download Button
-function PhotoCell({ pass }: { pass: EmployeePass }) {
-  const [isHovered, setIsHovered] = useState(false);
-  
-  const handleDownloadPhoto = async () => {
-    try {
-      const imageUrl = getHighResImageUrl(pass.photo);
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `${pass.name.replace(/[^a-zA-Z0-9]/g, '_')}_${formatTablePassId(pass.passId)}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch  {
-      console.error('Error downloading photo:');
-      alert('Failed to download photo. Please try again.');
-    }
+function ActionsCell({ pass, onDelete, deleteState }: { 
+  pass: EmployeePass; 
+  onDelete: (passId: string, passName: string) => Promise<void>; 
+  deleteState: DeleteState; 
+}) {
+  // Generate the correct route based on pass category and pass entry year
+  const getViewUrl = () => {
+    // 1. Get the year from the pass's entry date.
+    const year = new Date(pass.dateOfEntry).getFullYear();
+    // 2. Determine the correct path segment based on the category.
+    const categoryPath = pass.category === 'cargo' ? 'cargo-id' : 'landside-id';
+    
+    // 3. Construct the new, clean URL using the Pass ID and Year in the path.
+    return `/${categoryPath}/${pass.passId}/${year}`;
   };
 
   return (
-    <td className="px-4 py-3 relative">
-      <div 
-        className="relative inline-block"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+    <div className="flex space-x-1">
+      <Link
+        href={getViewUrl()}
+        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-600 bg-green-100 hover:bg-green-200"
+        title="View Pass Details"
       >
-        <Image 
-          src={getImageUrl(pass.photo)} 
-          alt={`${pass.name}'s photo`} 
-          width={40} 
-          height={40} 
-          className="rounded-full object-cover"
-        />
-        {isHovered && (
-          <button
-            onClick={handleDownloadPhoto}
-            className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white hover:bg-opacity-70 transition-all duration-200"
-            title="Download Photo"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </button>
-        )}
-      </div>
-    </td>
+        View
+      </Link>
+      <Link
+        href={`/edit-pass/${pass._id}`}
+        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-600 bg-blue-100 hover:bg-blue-200"
+        title="Edit Pass"
+      >
+        Edit
+      </Link>
+      <button
+        onClick={() => onDelete(pass._id, pass.name || 'Unknown')}
+        disabled={deleteState.isDeleting && deleteState.deletingId === pass._id}
+        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50"
+        title="Delete Pass"
+      >
+        {deleteState.isDeleting && deleteState.deletingId === pass._id ? '...' : 'Delete'}
+      </button>
+    </div>
   );
 }
 
-function ErrorDisplay({ error, onRetry }: { error: string; onRetry: () => void }) { 
-  return ( 
-    <div className="text-center py-10 text-red-600"> 
-      <p className="mb-4">Error: {error}</p> 
-      <button onClick={onRetry} className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"> 
-        Retry 
-      </button> 
-    </div> 
-  ); 
+function ErrorDisplay({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="text-center py-10">
+      <p className="text-red-600 mb-4">{error}</p>
+      <button onClick={onRetry} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        Retry
+      </button>
+    </div>
+  );
 }
 
-function LoadingSkeleton() { 
-  return ( 
-    <div className="text-center py-20"> 
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div> 
-      <p className="mt-4 text-gray-600">Loading Passes...</p> 
-    </div> 
-  ); 
+function LoadingSkeleton() {
+  return (
+    <div className="px-4 sm:px-6 lg:px-8">
+      <div className="animate-pulse">
+        <div className="h-8 bg-gray-300 rounded w-1/4 mb-4"></div>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-4 bg-gray-300 rounded"></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// --- MAIN COMPONENT ---
+function EmptyState({ year, category, search }: { year: string; category: string; search: string; }) {
+  return (
+    <tr>
+      <td colSpan={19} className="px-6 py-14 text-center">
+        <div className="space-y-2">
+          <p className="text-gray-500">No passes found</p>
+          {(year !== 'all' || category !== 'all' || search) && (
+            <p className="text-sm text-gray-400">
+              Try adjusting your filters
+            </p>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function formatSecurityClearance(clearance?: string): string {
+  const clearanceMap: Record<string, string> = {
+    'special_branch': 'Special Branch Police',
+    'local_police': 'Local Police',
+    'na': 'Not Applicable'
+  };
+  return clearanceMap[clearance || ''] || clearance || 'N/A';
+}
+
 export default function DatabasePage() {
   const { status } = useSession();
   const router = useRouter();
@@ -157,436 +169,514 @@ export default function DatabasePage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('createdAt_desc');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const selectAllCheckboxRef = useRef<HTMLInputElement | null>(null);
+  const [yearFilter, setYearFilter] = useState<string>(new Date().getFullYear().toString());
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const response = await fetch('/api/get-passes', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Failed to fetch passes: ${response.statusText}`);
+      setLoading(true);
+      setError(null);
+      const response = await fetch('/api/passes');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      setPasses(data);
-    } catch(err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      setPasses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error loading passes:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load passes');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push('/');
-    else if (status === 'authenticated') loadData();
-  }, [status, router, loadData]);
-
-const handleDelete = useCallback(async (passId: string, passName: string) => {
-    if (!window.confirm(`Are you sure you want to delete the pass for ${passName}? This action cannot be undone.`)) {
-        return;
-    }
-    
-    setDeleteState({ isDeleting: true, deletingId: passId });
-    setError(null);
-    
-    try {
-        const response = await fetch('/api/delete-pass', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: passId }),
-        });
-
-        // Check if response has content before parsing JSON
-        let result;
-        const text = await response.text();
-        
-        if (text) {
-            try {
-                result = JSON.parse(text);
-            } catch {
-                throw new Error(`Invalid JSON response: ${text}`);
-            }
-        } else {
-            throw new Error('Empty response from server');
-        }
-
-        if (!response.ok) {
-            throw new Error(result?.error || `Server error: ${response.status} ${response.statusText}`);
-        }
-        
-        // Success - remove the pass from local state
-        setPasses(prevPasses => prevPasses.filter(p => p._id !== passId));
-        
-    } catch (err) {
-        console.error('Delete error:', err);
-        setError(err instanceof Error ? err.message : 'An unknown error occurred during deletion.');
-    } finally {
-        setDeleteState({ isDeleting: false, deletingId: null });
-    }
-}, []);
-
-  const handleBulkDelete = useCallback(async () => {
-    const numSelected = selectedPassIds.size;
-    if (numSelected === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${numSelected} selected pass(es)? This action cannot be undone.`)) {
+    if (status === 'loading') return;
+    if (status !== 'authenticated') {
+      router.push('/auth/signin');
       return;
     }
+    loadData();
+  }, [status, router, loadData]);
 
-    setLoading(true);
-    setError(null);
+  const handleDelete = useCallback(async (passId: string, passName: string) => {
+    if (!confirm(`Are you sure you want to delete the pass for ${passName}?`)) return;
     try {
-      const response = await fetch('/api/bulk-delete-passes', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: Array.from(selectedPassIds) }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to delete selected passes.');
-
-      setSelectedPassIds(new Set());
+      setDeleteState({ isDeleting: true, deletingId: passId });
+      const response = await fetch(`/api/passes/${passId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Failed to delete pass');
       await loadData();
-    } catch(err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred during bulk deletion.');
-      setLoading(false);
+      setSelectedPassIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(passId);
+        return newSet;
+      });
+    } catch (err) {
+      console.error('Error deleting pass:', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete pass');
+    } finally {
+      setDeleteState({ isDeleting: false, deletingId: null });
+    }
+  }, [loadData]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedPassIds.size} selected passes?`)) return;
+    try {
+      setLoading(true);
+      await Promise.all(Array.from(selectedPassIds).map(id => 
+        fetch(`/api/passes/${id}`, { method: 'DELETE' })
+      ));
+      await loadData();
+      setSelectedPassIds(new Set());
+    } catch (err) {
+      console.error('Error deleting passes:', err);
+      alert('Failed to delete some passes');
     }
   }, [selectedPassIds, loadData]);
 
-  // PDF Download Functions
   const handleDownloadPDF = async (selectedOnly = false) => {
-    setIsGeneratingPDF(true);
     try {
-      const jsPDF = (await import('jspdf')).default;
-      const autoTable = (await import('jspdf-autotable')).default;
-
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const dataToExport = selectedOnly 
+      setIsGeneratingPDF(true);
+      
+      const passesToDownload = selectedOnly 
         ? filteredAndSortedPasses.filter(pass => selectedPassIds.has(pass._id))
         : filteredAndSortedPasses;
-
-      if (dataToExport.length === 0) {
-        alert(selectedOnly ? 'No passes selected for export.' : 'No passes available for export.');
+      
+      console.log('Generating PDF for', passesToDownload.length, 'passes');
+      
+      if (passesToDownload.length === 0) {
+        alert('No passes to export. Please select passes or adjust your filters.');
         return;
       }
 
-      // Add title
-      doc.setFontSize(18);
-      doc.text(`Employee Database Report${selectedOnly ? ' (Selected)' : ''}`, 20, 20);
-      
-      // Add generation info
-      doc.setFontSize(12);
-      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
-      doc.text(`Total Records: ${dataToExport.length}`, 20, 37);
-      
-      // Add filter info if any filters are applied
-      let yPos = 44;
-      if (filters.search || filters.category !== 'all') {
-        doc.text('Applied Filters:', 20, yPos);
-        yPos += 7;
-        if (filters.search) {
-          doc.text(`• Search: "${filters.search}"`, 25, yPos);
-          yPos += 7;
-        }
-        if (filters.category !== 'all') {
-          doc.text(`• Category: ${filters.category}`, 25, yPos);
-          yPos += 7;
-        }
-      }
+      // Show a loading indicator
+      const loadingToast = document.createElement('div');
+      loadingToast.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="width: 16px; height: 16px; border: 2px solid #ffffff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            Generating PDF... (${passesToDownload.length} records)
+          </div>
+        </div>
+        <style>
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+      `;
+      document.body.appendChild(loadingToast);
 
-      // Prepare table data
-      const tableData = dataToExport.map(employee => [
-        formatTablePassId(employee.passId),
-        employee.name || 'N/A',
-        employee.category || 'N/A',
-        employee.designation || 'N/A',
-        employee.organization || 'N/A',
-        employee.cnic || 'N/A',
-        employee.areaAllowed?.join(', ') || 'N/A',
-        formatDateSafely(employee.dateOfEntry),
-        formatDateSafely(employee.dateOfExpiry),
-        employee.author?.name || 'System'
-      ]);
-
-      // Add table
-      autoTable(doc, {
-        head: [[
-          'Pass ID',
-          'Name',
-          'Category',
-          'Designation',
-          'Organization',
-          'CNIC',
-          'Area Allowed',
-          'Entry Date',
-          'Expiry Date',
-          'Created By'
-        ]],
-        body: tableData,
-        startY: yPos + 10,
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
         },
-        headStyles: {
-          fillColor: [79, 70, 229],
-          textColor: 255,
-          fontStyle: 'bold',
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252],
-        },
-        margin: { top: 20, right: 20, bottom: 20, left: 20 },
-        tableWidth: 'auto',
-        columnStyles: {
-          0: { cellWidth: 20 }, // Pass ID
-          1: { cellWidth: 25 }, // Name
-          2: { cellWidth: 18 }, // Category
-          3: { cellWidth: 22 }, // Designation
-          4: { cellWidth: 30 }, // Organization
-          5: { cellWidth: 25 }, // CNIC
-          6: { cellWidth: 35 }, // Area Allowed
-          7: { cellWidth: 22 }, // Entry Date
-          8: { cellWidth: 22 }, // Expiry Date
-          9: { cellWidth: 25 }, // Created By
-        },
+        body: JSON.stringify({ passes: passesToDownload }),
       });
 
-      // Save the PDF
-      const fileName = selectedOnly 
-        ? `selected-employees-${new Date().toISOString().split('T')[0]}.pdf`
-        : `all-employees-${new Date().toISOString().split('T')[0]}.pdf`;
+      console.log('PDF API response status:', response.status);
+      console.log('PDF API response headers:', Object.fromEntries(response.headers.entries()));
+
+      // Remove loading toast
+      document.body.removeChild(loadingToast);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: Failed to generate PDF`;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          if (errorData.details) {
+            console.error('PDF generation error details:', errorData.details);
+          }
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+        }
+        
+        throw new Error(errorMessage);
+      }
       
-      doc.save(fileName);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF. Please try again.');
+      // Check if response is actually a PDF
+      const contentType = response.headers.get('content-type');
+      console.log('Response content type:', contentType);
+      
+      if (!contentType?.includes('application/pdf')) {
+        console.error('Response is not a PDF:', contentType);
+        
+        // Try to read as text to see what we got
+        const textResponse = await response.clone().text();
+        console.error('Response content (first 500 chars):', textResponse.substring(0, 500));
+        
+        throw new Error(`Server returned invalid content type: ${contentType}. Expected PDF.`);
+      }
+
+      const blob = await response.blob();
+      console.log('PDF blob size:', blob.size, 'bytes');
+      
+      if (blob.size === 0) {
+        throw new Error('Generated PDF is empty');
+      }
+
+      // Verify it's a valid PDF by checking the header
+      const arrayBuffer = await blob.slice(0, 5).arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const pdfHeader = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
+      
+      if (!pdfHeader.startsWith('%PDF')) {
+        console.error('Invalid PDF header:', pdfHeader);
+        throw new Error('Generated file is not a valid PDF');
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `paa-passes-${selectedOnly ? 'selected' : 'all'}-${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.pdf`;
+      
+      // Trigger download
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 100);
+      
+      console.log('PDF download initiated successfully');
+
+      // Show success message
+      const successToast = document.createElement('div');
+      successToast.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+          ✅ PDF generated successfully! (${passesToDownload.length} records)
+        </div>
+      `;
+      document.body.appendChild(successToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(successToast)) {
+          document.body.removeChild(successToast);
+        }
+      }, 3000);
+
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      
+      // Show error message
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      const errorToast = document.createElement('div');
+      errorToast.innerHTML = `
+        <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 24px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px;">
+          <div style="font-weight: 600; margin-bottom: 4px;">❌ PDF Generation Failed</div>
+          <div style="font-size: 14px; opacity: 0.9;">${errorMessage}</div>
+        </div>
+      `;
+      document.body.appendChild(errorToast);
+      
+      setTimeout(() => {
+        if (document.body.contains(errorToast)) {
+          document.body.removeChild(errorToast);
+        }
+      }, 5000);
+      
     } finally {
       setIsGeneratingPDF(false);
     }
   };
 
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    passes.forEach(pass => {
+      if (pass.dateOfEntry) {
+        years.add(new Date(pass.dateOfEntry).getFullYear().toString());
+      }
+    });
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
+  }, [passes]);
+
   const filteredAndSortedPasses = useMemo(() => {
-    return passes
+    const passesToProcess = Array.isArray(passes) ? passes : [];
+    return passesToProcess
+      .filter(pass => yearFilter === 'all' || (pass.dateOfEntry ? new Date(pass.dateOfEntry).getFullYear().toString() === yearFilter : false))
       .filter(pass => filters.category === 'all' || pass.category === filters.category)
       .filter(pass => {
         if (!filters.search) return true;
         const searchTerm = filters.search.toLowerCase().trim();
-        const searchTermNoDash = searchTerm.replace(/-/g, '');
         const fieldsToSearch = [ 
-          pass.name, 
-          pass.organization, 
-          pass.designation, 
-          pass.cnic?.replace(/-/g, ''),
-          pass.author?.name, 
-          String(pass.passId), 
-          Array.isArray(pass.areaAllowed) ? pass.areaAllowed.join(' ') : '' 
+          pass.name, pass.fatherName, getIdNumber(pass), pass.mobileNumber, 
+          pass.organization, pass.designation, pass.author?.name, 
+          String(pass.passId), pass.nationality, pass.placeOfBirth
         ];
-        return fieldsToSearch.some(field => 
-            field?.toLowerCase().includes(searchTerm) || 
-            (field === pass.cnic?.replace(/-/g, '') && field?.includes(searchTermNoDash))
-        );
+        return fieldsToSearch.some(field => field && typeof field === 'string' && field.toLowerCase().includes(searchTerm));
       })
       .sort((a, b) => {
-  switch (sortOrder) {
-    case 'passId_asc':
-      return (Number(a.passId) || 0) - (Number(b.passId) || 0);
-    case 'passId_desc':
-      return (Number(b.passId) || 0) - (Number(a.passId) || 0);
-    case 'name_asc':
-      return a.name.localeCompare(b.name);
-    case 'expiry_asc': {
-      const dateA = a.dateOfExpiry ? new Date(a.dateOfExpiry).getTime() : 0;
-      const dateB = b.dateOfExpiry ? new Date(b.dateOfExpiry).getTime() : 0;
-      return dateA - dateB;
-    }
-    case 'createdAt_desc':
-    default: {
-      const createdA = a._createdAt ? new Date(a._createdAt).getTime() : 0;
-      const createdB = b._createdAt ? new Date(b._createdAt).getTime() : 0;
-      return createdB - createdA;
-    }
-  }
-});
-  }, [passes, filters, sortOrder]);
-
-  useEffect(() => {
-    if (selectAllCheckboxRef.current) {
-      const numSelected = selectedPassIds.size;
-      const numFiltered = filteredAndSortedPasses.length;
-      selectAllCheckboxRef.current.indeterminate = numSelected > 0 && numSelected < numFiltered;
-    }
-  }, [selectedPassIds, filteredAndSortedPasses]);
+        switch (sortOrder) {
+            case 'passId_asc': return (a.passId || 0) - (b.passId || 0);
+            case 'passId_desc': return (b.passId || 0) - (a.passId || 0);
+            case 'name_asc': return (a.name || '').localeCompare(b.name || '');
+            case 'expiry_asc': return (new Date(a.dateOfExpiry || 0).getTime()) - (new Date(b.dateOfExpiry || 0).getTime());
+            case 'createdAt_desc': default: return (new Date(b._createdAt || 0).getTime()) - (new Date(a._createdAt || 0).getTime());
+        }
+      });
+  }, [passes, filters, sortOrder, yearFilter]);
 
   const handleSelectAll = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) setSelectedPassIds(new Set(filteredAndSortedPasses.map(p => p._id)));
-    else setSelectedPassIds(new Set());
+    if (e.target.checked) {
+      setSelectedPassIds(new Set(filteredAndSortedPasses.map(pass => pass._id)));
+    } else {
+      setSelectedPassIds(new Set());
+    }
   };
-  
+
   const handleSelectSingle = (passId: string, isChecked: boolean) => {
-    setSelectedPassIds(prev => { 
-      const newSet = new Set(prev); 
-      if (isChecked) newSet.add(passId); 
-      else newSet.delete(passId); 
-      return newSet; 
+    setSelectedPassIds(prev => {
+      const newSet = new Set(prev);
+      if (isChecked) {
+        newSet.add(passId);
+      } else {
+        newSet.delete(passId);
+      }
+      return newSet;
     });
   };
 
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      const checkbox = selectAllCheckboxRef.current;
+      if (selectedPassIds.size === 0) {
+        checkbox.checked = false;
+        checkbox.indeterminate = false;
+      } else if (selectedPassIds.size === filteredAndSortedPasses.length) {
+        checkbox.checked = true;
+        checkbox.indeterminate = false;
+      } else {
+        checkbox.checked = false;
+        checkbox.indeterminate = true;
+      }
+    }
+  }, [selectedPassIds, filteredAndSortedPasses]);
+
   if (status === 'loading' || (loading && !deleteState.isDeleting)) return <LoadingSkeleton />;
   if (error) return <ErrorDisplay error={error} onRetry={loadData} />;
-  if (status !== 'authenticated') return <div className="text-center py-10"><p>Access Denied. Please log in.</p></div>;
+  if (status !== 'authenticated') return <div className="text-center py-10"><p>Access Denied.</p></div>;
 
-  const tableHeaders = ['Category', 'Pass ID', 'Photo', 'Name', 'Designation', 'Organization', 'CNIC', 'Area Allowed', 'Entry Date', 'Expiry Date', 'Created By', 'Actions'];
+  // Updated table headers to include all new fields
+  const tableHeaders = [
+    'SELECT',
+    'CATEGORY', 
+    'PASS ID', 
+    'PHOTO', 
+    'NAME', 
+    "FATHER'S NAME", 
+    'DOB',
+    'PLACE OF BIRTH',
+    'NATIONALITY',
+    'DESIGNATION', 
+    'ORGANIZATION', 
+    'ID NUMBER', 
+    'MOBILE NO.', 
+    'PERMANENT ADDRESS',
+    'PRESENT ADDRESS',
+    'SECURITY', 
+    'AREAS', 
+    'ENTRY', 
+    'EXPIRY', 
+    'ACTIONS'
+  ];
 
   return (
-    <div className="bg-white shadow-md rounded-lg m-4">
-      {/* Header and Filters Section */}
-      <div className="p-4 border-b space-y-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">
-            PAA PASS DATA <span className="text-lg font-normal text-gray-500">({filteredAndSortedPasses.length})</span>
-          </h1>
-          <div className="flex items-center space-x-2">
-            {/* PDF Download Buttons */}
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={() => handleDownloadPDF(false)}
-                disabled={isGeneratingPDF || filteredAndSortedPasses.length === 0}
-                className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded text-sm disabled:bg-gray-400 flex items-center space-x-2"
-              >
-                {isGeneratingPDF ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Download All PDF</span>
-                  </>
-                )}
-              </button>
-              
-              {selectedPassIds.size > 0 && (
-                <button 
-                  onClick={() => handleDownloadPDF(true)}
-                  disabled={isGeneratingPDF}
-                  className="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded text-sm disabled:bg-gray-400 flex items-center space-x-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>Download Selected PDF ({selectedPassIds.size})</span>
-                </button>
-              )}
-            </div>
-            
-            {selectedPassIds.size > 0 && (
-              <button 
-                onClick={handleBulkDelete} 
-                disabled={loading} 
-                className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded text-sm disabled:bg-gray-400"
-              >
-                Delete Selected ({selectedPassIds.size})
-              </button>
-            )}
-            <Link href="/bulk-add-passes" className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded text-sm">Bulk Add</Link>
-            <Link href="/add-pass" className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded text-sm">+ Add New Pass</Link>
-          </div>
+    <div className="px-4 sm:px-6 lg:px-8">
+      {/* --- HEADER --- */}
+      <div className="sm:flex sm:items-center">
+        <div className="sm:flex-auto">
+          <h1 className="text-2xl font-bold text-gray-900">PAA PASS DATA ({yearFilter === 'all' ? 'All Years' : yearFilter}) <span className="text-lg font-normal text-gray-500">({filteredAndSortedPasses.length})</span></h1>
         </div>
-        <div className="flex items-center space-x-4">
-          <input 
-            type="search" 
-            placeholder="Search by name, CNIC, pass ID, etc..." 
-            value={filters.search} 
-            onChange={(e) => setFilters(prev => ({...prev, search: e.target.value}))} 
-            className="w-full p-2 border border-gray-300 rounded-md text-sm"
-          />
-          <select 
-            value={filters.category} 
-            onChange={(e) => setFilters(prev => ({...prev, category: e.target.value as PassCategory | 'all'}))} 
-            className="p-2 border border-gray-300 rounded-md text-sm"
-          >
-            <option value="all">All Categories</option> 
-            <option value="cargo">Cargo</option> 
-            <option value="landside">Landside</option>
-          </select>
-          <select 
-            value={sortOrder} 
-            onChange={(e) => setSortOrder(e.target.value as SortOrder)} 
-            className="p-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 w-52"
-          >
-            <option value="createdAt_desc">Sort by: Newest First</option>
-            <option value="passId_asc">Sort by: Pass ID (Asc)</option>
-            <option value="passId_desc">Sort by: Pass ID (Desc)</option>
-            <option value="name_asc">Sort by: Name (A-Z)</option>
-            <option value="expiry_asc">Sort by: Expiry Date</option>
-          </select>
+        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex items-center space-x-2">
+            <button onClick={() => handleDownloadPDF(false)} disabled={isGeneratingPDF || filteredAndSortedPasses.length === 0} className="inline-flex items-center justify-center rounded-md border border-transparent bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-purple-700 disabled:opacity-50">
+              {isGeneratingPDF ? '...' : 'Download PDF'}
+            </button>
+            <Link href="/bulk-add-passes" className="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700">Bulk Add</Link>
+            <Link href="/add-pass" className="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+                + Add New Pass
+            </Link>
         </div>
       </div>
-      
-      {/* Table Section */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3">
-                <input 
-                  ref={selectAllCheckboxRef} 
-                  type="checkbox" 
-                  onChange={handleSelectAll} 
-                  checked={filteredAndSortedPasses.length > 0 && selectedPassIds.size === filteredAndSortedPasses.length} 
-                />
-              </th>
-              {tableHeaders.map(header => (
-                <th key={header} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredAndSortedPasses.length > 0 ? (
-              filteredAndSortedPasses.map(pass => (
-                <tr key={pass._id} className={selectedPassIds.has(pass._id) ? 'bg-blue-50' : 'hover:bg-gray-50'}>
-                  <td className="px-4 py-3">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedPassIds.has(pass._id)} 
-                      onChange={(e) => handleSelectSingle(pass._id, e.target.checked)} 
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-                      {pass.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-medium text-gray-800 font-mono">
-                    {formatTablePassId(pass.passId)}
-                  </td>
-                  <PhotoCell pass={pass} />
-                  <td className="px-4 py-3 font-medium text-gray-900">{pass.name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{pass.designation}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{pass.organization}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500 font-mono">{pass.cnic}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{pass.areaAllowed?.join(', ')}</td>
-                  <td className="px-4 py-3 text-sm">{formatDateSafely(pass.dateOfEntry)}</td>
-                  <td className="px-4 py-3 text-sm">{formatDateSafely(pass.dateOfExpiry)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{pass.author?.name || 'System'}</td>
-                  <ActionsCell pass={pass} onDelete={handleDelete} deleteState={deleteState} />
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={13} className="text-center py-10 text-gray-500">
-                  No passes found for the selected filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+
+      {/* --- FILTERS --- */}
+      <div className="mt-4 grid grid-cols-1 gap-y-4 md:grid-cols-4 md:gap-x-4">
+          <div className="md:col-span-2"><input type="search" placeholder="Search by Name, ID, Phone, etc..." value={filters.search} onChange={(e) => setFilters(prev => ({...prev, search: e.target.value}))} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2" /></div>
+          <select value={filters.category} onChange={(e) => setFilters(prev => ({...prev, category: e.target.value as PassCategory | 'all'}))} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+            <option value="all">All Categories</option><option value="cargo">Cargo</option><option value="landside">Landside</option>
+          </select>
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+            <option value="all">All Years</option>{availableYears.map(year => (<option key={year} value={year}>{year}</option>))}
+          </select>
+          <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)} className="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2">
+            <option value="createdAt_desc">Sort by: Newest First</option><option value="passId_asc">Sort by: Pass ID (Asc)</option><option value="passId_desc">Sort by: Pass ID (Desc)</option><option value="name_asc">Sort by: Name (A-Z)</option><option value="expiry_asc">Sort by: Expiry Date</option></select>
+      </div>
+
+      <div className="mt-8 flex flex-col">
+        <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
+          <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
+            <div className="relative overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+              {selectedPassIds.size > 0 && (
+                  <div className="absolute left-14 top-0 flex h-12 items-center space-x-3 bg-gray-50 sm:left-12">
+                      <button onClick={handleBulkDelete} disabled={loading} className="inline-flex items-center rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50">
+                          Delete selected ({selectedPassIds.size})
+                      </button>
+                      <button onClick={() => handleDownloadPDF(true)} disabled={isGeneratingPDF} className="inline-flex items-center rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50">
+                          PDF selected ({selectedPassIds.size})
+                      </button>
+                  </div>
+              )}
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {tableHeaders.map((header, index) => (
+                      <th
+                        key={index}
+                        scope="col"
+                        className={`px-3 py-3.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wide ${
+                          index === 0 ? 'relative w-12' : ''
+                        }`}
+                      >
+                        {index === 0 ? (
+                          <input
+                            type="checkbox"
+                            ref={selectAllCheckboxRef}
+                            className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600"
+                            onChange={handleSelectAll}
+                          />
+                        ) : (
+                          header
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {filteredAndSortedPasses.length > 0 ? (
+                    filteredAndSortedPasses.map(pass => (
+                      <tr key={pass._id} className={selectedPassIds.has(pass._id) ? 'bg-indigo-50' : ''}>
+                        {/* SELECT */}
+                        <td className="relative w-12 px-6 sm:w-16 sm:px-8">
+                          <input
+                            type="checkbox"
+                            className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600"
+                            checked={selectedPassIds.has(pass._id)}
+                            onChange={(e) => handleSelectSingle(pass._id, e.target.checked)}
+                          />
+                        </td>
+                        {/* CATEGORY */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            pass.category === 'cargo' 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {pass.category?.toUpperCase()}
+                          </span>
+                        </td>
+                        {/* PASS ID */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">
+                          {formatTablePassId(pass.passId)}
+                        </td>
+                        {/* PHOTO */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <Image
+                              src={getImageUrl(pass.photo)}
+                              alt={pass.name || 'Employee'}
+                              width={40}
+                              height={40}
+                              className="h-10 w-10 rounded-full object-cover"
+                            />
+                          </div>
+                        </td>
+                        {/* NAME */}
+                        <td className="px-3 py-4 text-sm font-medium text-gray-900">
+                          {pass.name || 'N/A'}
+                        </td>
+                        {/* FATHER'S NAME */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          {pass.fatherName || 'N/A'}
+                        </td>
+                        {/* DOB */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          {formatDateSafely(pass.dateOfBirth)}
+                        </td>
+                        {/* PLACE OF BIRTH */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          {pass.placeOfBirth || 'N/A'}
+                        </td>
+                        {/* NATIONALITY */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          {pass.nationality || 'N/A'}
+                        </td>
+                        {/* DESIGNATION */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          {pass.designation || 'N/A'}
+                        </td>
+                        {/* ORGANIZATION */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          {pass.organization || 'N/A'}
+                        </td>
+                        {/* ID NUMBER */}
+                        <td className="px-3 py-4 text-sm text-gray-500 font-mono">
+                          {getIdNumber(pass)}
+                        </td>
+                        {/* MOBILE NO */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 font-mono">
+                          {pass.mobileNumber || 'N/A'}
+                        </td>
+                        {/* PERMANENT ADDRESS */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          <MultiLineCell text={pass.permanentAddress} />
+                        </td>
+                        {/* PRESENT ADDRESS */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          <MultiLineCell text={pass.presentAddress} />
+                        </td>
+                        {/* SECURITY */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          {formatSecurityClearance(pass.securityClearance)}
+                        </td>
+                        {/* AREAS */}
+                        <td className="px-3 py-4 text-sm text-gray-500">
+                          <div className="max-w-xs">
+                            {pass.areaAllowed && Array.isArray(pass.areaAllowed) 
+                              ? pass.areaAllowed.join(', ') 
+                              : 'N/A'
+                            }
+                          </div>
+                        </td>
+                        {/* ENTRY */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          {formatDateSafely(pass.dateOfEntry)}
+                        </td>
+                        {/* EXPIRY */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm">
+                          <span className={`${
+                            pass.dateOfExpiry && new Date(pass.dateOfExpiry) < new Date()
+                              ? 'text-red-600 font-medium'
+                              : 'text-gray-500'
+                          }`}>
+                            {formatDateSafely(pass.dateOfExpiry)}
+                          </span>
+                        </td>
+                        {/* ACTIONS */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm">
+                          <ActionsCell pass={pass} onDelete={handleDelete} deleteState={deleteState} />
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <EmptyState year={yearFilter} category={filters.category} search={filters.search} />
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
