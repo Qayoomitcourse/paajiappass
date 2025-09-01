@@ -9,6 +9,12 @@ const nextConfig = {
         port: '',
         pathname: '/images/**', // This specifies the path prefix for your images
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn.sanity.io',
+        port: '',
+        pathname: '/files/**', // This handles files (PDFs, documents, etc.)
+      },
     ],
   },
 };

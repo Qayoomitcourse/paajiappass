@@ -387,6 +387,7 @@ async function LoggedOutView() {
               <p>• Required for logistics and cargo operations</p>
               <p>• Valid for 1 year from issue date</p>
               <p>• Special Branch Police Clearence is required</p>
+              <p>• Fees for each Pass PKR300 to be deposited in HBL/NBP</p>
             </div>
           </div>
 
@@ -404,7 +405,8 @@ async function LoggedOutView() {
               <p>• Access to Terminal building&apos;s Concourse Hall and offices</p>
               <p>• Required for administrative and service work</p>
               <p>• Valid for 1 year from issue date subject to Special Branch Police Clearence</p>
-              <p>• Valid for 3 year from issue date in case of Local Police Verification</p>
+              <p>• Valid for 3 months from issue date in case of Local Police Verification</p>
+              <p>• Frees for each Pass PKR 300 to be deposited in HBL/NBP</p>
             </div>
           </div>
         </div>
@@ -523,21 +525,21 @@ async function LoggedOutView() {
                 <span className="text-xl">📞</span>
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Phone</h3>
-              <p className="text-gray-600">+92-XXX-XXXXXXX</p>
+              <p className="text-gray-600">+92-021-99071626</p>
             </div>
             <div>
               <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
                 <span className="text-xl">✉️</span>
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Email</h3>
-              <p className="text-gray-600">passes@paa.gov.pk</p>
+              <p className="text-gray-600">airportpassapp@gmail.com</p>
             </div>
             <div>
               <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-3">
                 <span className="text-xl">📍</span>
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Office Hours</h3>
-              <p className="text-gray-600">Mon-Fri: 8:00 AM - 4:00 PM</p>
+              <p className="text-gray-600">Mon-Fri: 0:00 AM - 5:00 PM</p>
             </div>
           </div>
         </div>

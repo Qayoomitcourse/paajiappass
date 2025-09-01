@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate": "node migrate-data.js",
+    "migrate:dry-run": "node migrate-data.js --dry-run"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

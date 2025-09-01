@@ -1,5 +1,3 @@
-// /src/sanity/schemaTypes/employee.ts
-
 import { defineField, defineType } from 'sanity';
 
 export default defineType({
@@ -9,8 +7,10 @@ export default defineType({
   fieldsets: [
     { name: 'personalDetails', title: 'Personal Details' },
     { name: 'contactDetails', title: 'Contact & Address Information' },
+    { name: 'employmentDetails', title: 'Employment Information' },
+    { name: 'passDetails', title: 'Pass Specifics' },
     { name: 'securityDetails', title: 'Security & Clearance' },
-    { name: 'passDetails', title: 'Pass Specifics', options: { collapsible: true, collapsed: false } }
+    { name: 'feeDetails', title: 'Fee & Payment', options: { collapsible: true, collapsed: false } }
   ],
   fields: [
     // --- PASS DETAILS ---
@@ -18,10 +18,9 @@ export default defineType({
       name: 'passId',
       title: 'Pass ID',
       type: 'number',
-      description: 'System-generated unique Pass ID for the year and category.',
       readOnly: true,
       fieldset: 'passDetails',
-      validation: (Rule) => Rule.required().integer().positive(),
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'category',
@@ -50,74 +49,84 @@ export default defineType({
     defineField({
       name: 'idNumber',
       title: 'Passport No / CNIC Number',
-      description: 'Enter the unique identification number (e.g., 42201-1234567-1).',
       type: 'string',
       validation: Rule => Rule.required(),
       fieldset: 'personalDetails',
     }),
     defineField({
-        name: 'dateOfBirth',
-        title: 'Date of Birth',
-        type: 'date',
-        fieldset: 'personalDetails',
+  name: 'cnic',
+  title: 'CNIC (Legacy - for old records)',
+  type: 'string',
+  fieldset: 'personalDetails',
+  readOnly: true, // Make it read-only so it doesn't interfere with new entries
+  hidden: true,   // Hide it from the form since you're using idNumber now
+}),
+    defineField({
+      name: 'dateOfBirth',
+      title: 'Date of Birth',
+      type: 'date',
+      fieldset: 'personalDetails',
     }),
     defineField({
-        name: 'placeOfBirth',
-        title: 'Place of Birth',
-        type: 'string',
-        fieldset: 'personalDetails',
+      name: 'placeOfBirth',
+      title: 'Place of Birth',
+      type: 'string',
+      fieldset: 'personalDetails',
     }),
     defineField({
-        name: 'nationality',
-        title: 'Nationality',
-        type: 'string',
-        initialValue: 'Pakistani',
-        fieldset: 'personalDetails',
+      name: 'nationality',
+      title: 'Nationality',
+      type: 'string',
+      initialValue: 'Pakistani',
+      fieldset: 'personalDetails',
     }),
 
-    // --- PHOTO AND EMPLOYMENT (No Fieldset) ---
+    // --- CONTACT DETAILS ---
+    defineField({
+      name: 'mobileNumber',
+      title: 'Mobile Number',
+      type: 'string',
+      fieldset: 'contactDetails',
+    }),
+    defineField({
+      name: 'permanentAddress',
+      title: 'Permanent Address',
+      type: 'text',
+      rows: 3,
+      fieldset: 'contactDetails',
+    }),
+    defineField({
+      name: 'presentAddress',
+      title: 'Present Address',
+      type: 'text',
+      rows: 3,
+      fieldset: 'contactDetails',
+    }),
+
+    // --- EMPLOYMENT DETAILS ---
     defineField({
       name: 'photo',
-      title: 'Photo',
+      title: 'Employee Photo',
       type: 'image',
       options: { hotspot: true },
+      fieldset: 'employmentDetails',
     }),
     defineField({
       name: 'designation',
       title: 'Designation',
       type: 'string',
       validation: Rule => Rule.required(),
+      fieldset: 'employmentDetails',
     }),
     defineField({
       name: 'organization',
       title: 'Organization',
       type: 'string',
       validation: Rule => Rule.required(),
-    }),
-
-    // --- CONTACT DETAILS ---
-    defineField({
-        name: 'mobileNumber',
-        title: 'Mobile Number',
-        type: 'string',
-        fieldset: 'contactDetails',
-    }),
-    defineField({
-        name: 'permanentAddress',
-        title: 'Permanent Address',
-        type: 'text',
-        rows: 3,
-        fieldset: 'contactDetails',
-    }),
-    defineField({
-        name: 'presentAddress',
-        title: 'Present Address',
-        type: 'text',
-        rows: 3,
-        fieldset: 'contactDetails',
+      fieldset: 'employmentDetails',
     }),
     
-    // --- PASS SPECIFICS (Continued) ---
+    // --- PASS SPECIFICS ---
     defineField({
       name: 'areaAllowed',
       title: 'Area(s) Allowed',
@@ -141,22 +150,169 @@ export default defineType({
       validation: Rule => Rule.required(),
       fieldset: 'passDetails',
     }),
-    
+
     // --- SECURITY DETAILS ---
     defineField({
-        name: 'securityClearance',
-        title: 'Security Clearance From',
-        type: 'string',
-        options: {
-            list: [
-                { title: 'Special Branch Police', value: 'special_branch' },
-                { title: 'Local Police', value: 'local_police' },
-                { title: 'Not Applicable', value: 'na' },
-            ],
-            layout: 'radio',
-        },
-        initialValue: 'na',
-        fieldset: 'securityDetails',
+      name: 'securityClearance',
+      title: 'Security Clearance From',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'Special Branch Police', value: 'special_branch' },
+          { title: 'Local Police', value: 'local_police' },
+          { title: 'Not Applicable', value: 'na' },
+        ],
+        layout: 'radio',
+      },
+      initialValue: 'na',
+      fieldset: 'securityDetails',
+    }),
+    
+    // FIXED: Security Documents Field
+    defineField({
+      name: 'securityDocuments',
+      title: 'Security Clearance Documents',
+      type: 'array',
+      of: [{
+        type: 'object',
+        fields: [
+          {
+            name: 'docType',
+            type: 'string',
+            title: 'Document Type',
+            options: {
+              list: [
+                { title: 'Special Branch', value: 'special_branch' },
+                { title: 'Local Police', value: 'local_police' }
+              ]
+            }
+          },
+          {
+            name: 'issueDate',
+            type: 'date',
+            title: 'Issue Date'
+          },
+          {
+            name: 'document',
+            type: 'file',
+            title: 'Document File',
+            options: {
+              accept: 'image/*,.pdf'
+            }
+          }
+        ]
+      }],
+      fieldset: 'securityDetails',
+      hidden: ({ document }) => document?.securityClearance === 'na'
+    }),
+    
+    // --- FEE DETAILS ---
+    defineField({
+      name: 'isExempt',
+      title: 'Is Exempt from Payment',
+      type: 'boolean',
+      initialValue: false,
+      fieldset: 'feeDetails',
+    }),
+    defineField({
+      name: 'exemptionRemarks',
+      title: 'Exemption Remarks',
+      type: 'text',
+      fieldset: 'feeDetails',
+      hidden: ({ document }) => !document?.isExempt,
+    }),
+    // FIXED: Financial Details Field Structure
+    defineField({
+      name: 'financialDetails',
+      title: 'Payment Records',
+      type: 'array',
+      of: [{
+        type: 'object',
+        title: 'Payment Record',
+        fields: [
+          {
+            name: 'receiptNumber',
+            type: 'string',
+            title: 'Receipt Number',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'totalAmount',
+            type: 'string',
+            title: 'Total Amount',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'dateOfPayment',
+            type: 'date',
+            title: 'Date of Payment',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'bank',
+            type: 'string',
+            title: 'Bank',
+            options: {
+              list: ['HBL', 'NBP', 'OTHER']
+            },
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'otherBankName',
+            type: 'string',
+            title: 'Other Bank Name',
+            hidden: ({ parent }) => parent?.bank !== 'OTHER'
+          },
+          {
+            name: 'paymentMethod',
+            type: 'string',
+            title: 'Payment Method',
+            options: {
+              list: ['CASH', 'CHEQUE', 'ONLINE_TRANSFER', 'BANK_DRAFT']
+            },
+            initialValue: 'CASH',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'chequeNumber',
+            type: 'string',
+            title: 'Cheque/Draft Number',
+            hidden: ({ parent }) => !['CHEQUE', 'BANK_DRAFT'].includes(parent?.paymentMethod)
+          },
+          {
+            name: 'isMultipleEmployees',
+            type: 'boolean',
+            title: 'Payment for Multiple Employees',
+            initialValue: false
+          },
+          {
+            name: 'employeeCount',
+            type: 'number',
+            title: 'Number of Employees',
+            hidden: ({ parent }) => !parent?.isMultipleEmployees,
+            validation: Rule => Rule.min(1)
+          },
+          {
+            name: 'amountPerEmployee',
+            type: 'string',
+            title: 'Amount Per Employee',
+            hidden: ({ parent }) => !parent?.isMultipleEmployees
+          },
+          {
+            name: 'remarks',
+            type: 'text',
+            title: 'Remarks'
+          },
+          {
+            name: 'receiptImage',
+            type: 'image',
+            title: 'Receipt Image',
+            validation: Rule => Rule.required()
+          }
+        ]
+      }],
+      fieldset: 'feeDetails',
+      hidden: ({ document }) => document?.isExempt,
     }),
 
     // --- SYSTEM FIELDS ---
@@ -168,5 +324,4 @@ export default defineType({
       readOnly: true,
     }),
   ],
-  // --- (Orderings and Preview are unchanged) ---
 });

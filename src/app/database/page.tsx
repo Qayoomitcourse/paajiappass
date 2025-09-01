@@ -41,11 +41,10 @@ function formatDateSafely(dateString: string | null | undefined): string {
   catch { return 'Invalid Date'; }
 }
 
-// Helper function to get ID number from either new or old field
+// Replace the existing getIdNumber function in your database page
 function getIdNumber(pass: EmployeePass): string {
-  // Check for the new field first, then fall back to the old CNIC field
-  // by safely casting to a type that includes the optional 'cnic' property.
-  return pass.idNumber || (pass as { cnic?: string }).cnic || 'N/A';
+  // Check new field first, then legacy field
+  return pass.idNumber || pass.cnic || 'N/A';
 }
 
 function MultiLineCell({ text }: { text: string | undefined | null }) {
@@ -86,13 +85,14 @@ function ActionsCell({ pass, onDelete, deleteState }: {
       >
         View
       </Link>
-      <Link
-        href={`/edit-pass/${pass._id}`}
-        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-600 bg-blue-100 hover:bg-blue-200"
-        title="Edit Pass"
-      >
-        Edit
-      </Link>
+      {/* FIXED: Edit button now has consistent styling with View and Delete buttons */}
+    <Link 
+      href={`/add-pass?edit=${pass._id}`} 
+      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-600 bg-blue-100 hover:bg-blue-200"
+      title="Edit Pass"
+    >
+      Edit
+    </Link>
       <button
         onClick={() => onDelete(pass._id, pass.name || 'Unknown')}
         disabled={deleteState.isDeleting && deleteState.deletingId === pass._id}
@@ -116,19 +116,13 @@ function ErrorDisplay({ error, onRetry }: { error: string; onRetry: () => void }
   );
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <div className="animate-pulse">
-        <div className="h-8 bg-gray-300 rounded w-1/4 mb-4"></div>
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-4 bg-gray-300 rounded"></div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+function LoadingSkeleton() { 
+  return ( 
+    <div className="text-center py-20"> 
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div> 
+      <p className="mt-4 text-gray-600">Loading Passes...</p> 
+    </div> 
+  ); 
 }
 
 function EmptyState({ year, category, search }: { year: string; category: string; search: string; }) {
