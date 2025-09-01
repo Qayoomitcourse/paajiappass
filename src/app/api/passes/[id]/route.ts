@@ -270,7 +270,7 @@ const getActualIdNumber = (pass: ExistingPass): string => {
   return pass.idNumber || pass.cnic || '';
 };
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   console.log("=== UPDATE API ROUTE START ===");
   
   const session = await getServerSession(authOptions);
@@ -279,7 +279,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   try {
-    const { id } = params;
+    const { id } = await params; // FIXED: Await params
     
     if (!id) {
       return NextResponse.json({ error: "Pass ID is required" }, { status: 400 });
@@ -323,8 +323,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const { data: validatedData } = validationResult;
     // Extract id and create dataToPatch without destructuring assignment
-    const { id: passId, ...dataToPatch } = validatedData;
-    
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id: _, ...dataToPatch } = validatedData;
+  
     // Restore original arrays with files
     if (originalSecurityDocs.length > 0) {
       validatedData.securityDocuments = originalSecurityDocs;
@@ -613,10 +614,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // FIXED: Added Promise type
 ) {
+  const { id } = await params; // await the params
+  console.log("id = ", id)
   console.log("=== DELETE API ROUTE START ===");
-  console.log("Pass ID to delete:", params.id);
+  console.log("Pass ID to delete:", id); // FIXED: Use id instead of params.id
   
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -625,8 +628,6 @@ export async function DELETE(
   }
 
   try {
-    const { id } = params;
-    
     if (!id) {
       return NextResponse.json({ error: "Pass ID is required" }, { status: 400 });
     }
