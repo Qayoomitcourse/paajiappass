@@ -243,6 +243,7 @@ export async function PATCH(req: NextRequest) {
     // Use the same parsing logic as add-pass
     const dataToValidate = parseFormData(formData);
     
+    // Store original arrays with files before validation
     const originalSecurityDocs = dataToValidate.securityDocuments || [];
     const originalFinancialDetails = dataToValidate.financialDetails || [];
 
@@ -262,14 +263,6 @@ export async function PATCH(req: NextRequest) {
 
     const { data: validatedData } = validationResult;
     const { id, ...dataToPatch } = validatedData;
-
-    // Restore original arrays with files
-    if (originalSecurityDocs.length > 0) {
-      validatedData.securityDocuments = originalSecurityDocs;
-    }
-    if (originalFinancialDetails.length > 0) {
-      validatedData.financialDetails = originalFinancialDetails;
-    }
 
     // Fetch existing pass and check for conflicts
     const existingPass = await client.fetch<{ 
@@ -311,8 +304,8 @@ export async function PATCH(req: NextRequest) {
     }
 
     console.log("=== PRE-UPLOAD DEBUG ===");
-    console.log("Security docs before upload:");
-    validatedData.securityDocuments?.forEach((doc, i) => {
+    console.log("Original security docs before upload:");
+    originalSecurityDocs.forEach((doc, i) => {
       console.log(`  Doc ${i}:`, {
         docType: doc.docType,
         hasFile: !!doc._file,
@@ -321,8 +314,8 @@ export async function PATCH(req: NextRequest) {
       });
     });
 
-    console.log("Financial details before upload:");
-    validatedData.financialDetails?.forEach((detail, i) => {
+    console.log("Original financial details before upload:");
+    originalFinancialDetails.forEach((detail, i) => {
       console.log(`  Detail ${i}:`, {
         receiptNumber: detail.receiptNumber,
         hasFile: !!detail._file,
@@ -355,15 +348,15 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // Security Documents Upload - SAME AS ADD-PASS
+    // Security Documents Upload - Use original arrays with files
     console.log("=== SECURITY DOCUMENTS UPLOAD ===");
     const uploadedSecurityDocuments = [];
     
-    if (validatedData.securityDocuments && validatedData.securityDocuments.length > 0) {
-      console.log(`Processing ${validatedData.securityDocuments.length} security documents`);
+    if (originalSecurityDocs && originalSecurityDocs.length > 0) {
+      console.log(`Processing ${originalSecurityDocs.length} security documents`);
       
-      for (let i = 0; i < validatedData.securityDocuments.length; i++) {
-        const doc = validatedData.securityDocuments[i];
+      for (let i = 0; i < originalSecurityDocs.length; i++) {
+        const doc = originalSecurityDocs[i];
         console.log(`Processing security doc ${i}:`, doc);
         
         const file = doc._file;
@@ -412,15 +405,15 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // Financial Details Upload - SAME AS ADD-PASS
+    // Financial Details Upload - Use original arrays with files
     console.log("=== FINANCIAL DETAILS UPLOAD ===");
     const uploadedFinancialDetails = [];
     
-    if (validatedData.financialDetails && validatedData.financialDetails.length > 0) {
-      console.log(`Processing ${validatedData.financialDetails.length} financial details`);
+    if (originalFinancialDetails && originalFinancialDetails.length > 0) {
+      console.log(`Processing ${originalFinancialDetails.length} financial details`);
       
-      for (let i = 0; i < validatedData.financialDetails.length; i++) {
-        const detail = validatedData.financialDetails[i];
+      for (let i = 0; i < originalFinancialDetails.length; i++) {
+        const detail = originalFinancialDetails[i];
         console.log(`Processing financial detail ${i}:`, detail);
         
         const file = detail._file;

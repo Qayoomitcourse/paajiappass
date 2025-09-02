@@ -8,12 +8,14 @@ import { z } from 'zod';
 import { getNextPassId } from '../logic';
 import { EmployeePass } from '@/app/types';
 
-// Type definitions for better type safety
-interface SecurityDocument {
+interface SecurityDocInput {
   docType: string;
   issueDate?: string;
+}
+
+// Runtime (after parseFormData) → includes _file
+interface SecurityDocumentWithFile extends SecurityDocInput {
   _file?: File;
-  [key: string]: unknown;
 }
 
 interface FinancialDetail {
@@ -35,7 +37,7 @@ interface FinancialDetail {
 interface ParsedFormData {
   [key: string]: unknown;
   areaAllowed?: string[];
-  securityDocuments?: SecurityDocument[];
+  securityDocuments?: SecurityDocumentWithFile[];
   financialDetails?: FinancialDetail[];
   isExempt?: boolean;
 }
@@ -138,10 +140,10 @@ const updatePassSchema = z.object({
   { message: "Exemption remarks are required when exempt", path: ["exemptionRemarks"] }
 );
 
-// Use the exact same parseFormData function from add-pass
+// FIXED parseFormData function with proper type handling
 const parseFormData = (formData: FormData): ParsedFormData => {
   const data: ParsedFormData = {};
-  const securityDocsMap = new Map<number, SecurityDocument>();
+  const securityDocsMap = new Map<number, SecurityDocumentWithFile>();
   const financialDetailsMap = new Map<number, FinancialDetail>();
   
   console.log("=== PARSING FORM DATA ===");
@@ -153,7 +155,7 @@ const parseFormData = (formData: FormData): ParsedFormData => {
       if (!data.areaAllowed) data.areaAllowed = [];
       data.areaAllowed.push(value as string);
     } 
-    // Security Documents Processing - SAME AS ADD-PASS
+    // Security Documents Processing - FIXED
     else if (key.startsWith('securityDocument_') && !key.includes('Type') && !key.includes('Date') && !key.includes('Id')) {
       const match = key.match(/securityDocument_(\d+)$/);
       if (match && value instanceof File && value.size > 0) {
@@ -190,7 +192,7 @@ const parseFormData = (formData: FormData): ParsedFormData => {
         console.log(`Security doc ${index} date:`, value);
       }
     }
-    // Financial Details Processing - SAME AS ADD-PASS
+    // Financial Details Processing - FIXED
     else if (key.startsWith('financialDetail_')) {
       const match = key.match(/financialDetail_(\d+)_(.+)/);
       if (match) {
@@ -234,9 +236,9 @@ const parseFormData = (formData: FormData): ParsedFormData => {
     }
   }
   
-  // Convert Maps to Arrays
-  data.securityDocuments = Array.from(securityDocsMap.values()).filter(doc => {
-    const hasContent = doc && (doc._file || doc.docType);
+  // Convert Maps to Arrays - FIXED TYPE COMPATIBILITY
+  data.securityDocuments = Array.from(securityDocsMap.values()).filter((doc): doc is SecurityDocumentWithFile => {
+    const hasContent = !!(doc && (doc._file || doc.docType));
     if (hasContent) {
       console.log("Security doc being added:", { 
         hasFile: !!doc._file, 
@@ -247,8 +249,8 @@ const parseFormData = (formData: FormData): ParsedFormData => {
     return hasContent;
   });
   
-  data.financialDetails = Array.from(financialDetailsMap.values()).filter(detail => {
-    const hasContent = detail && (detail._file || detail.receiptNumber);
+  data.financialDetails = Array.from(financialDetailsMap.values()).filter((detail): detail is FinancialDetail => {
+    const hasContent = !!(detail && (detail._file || detail.receiptNumber));
     if (hasContent) {
       console.log("Financial detail being added:", { 
         hasFile: !!detail._file, 
@@ -279,7 +281,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   try {
-    const { id } = await params; // FIXED: Await params
+    const { id } = await params;
     
     if (!id) {
       return NextResponse.json({ error: "Pass ID is required" }, { status: 400 });
@@ -394,7 +396,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     console.log("=== PRE-UPLOAD DEBUG ===");
     console.log("Security docs before upload:");
-    validatedData.securityDocuments?.forEach((doc, i) => {
+    originalSecurityDocs.forEach((doc, i) => {
       console.log(`  Doc ${i}:`, {
         docType: doc.docType,
         hasFile: !!doc._file,
@@ -404,7 +406,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
 
     console.log("Financial details before upload:");
-    validatedData.financialDetails?.forEach((detail, i) => {
+    originalFinancialDetails.forEach((detail, i) => {
       console.log(`  Detail ${i}:`, {
         receiptNumber: detail.receiptNumber,
         hasFile: !!detail._file,
@@ -437,15 +439,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    // Security Documents Upload - SAME AS ADD-PASS
+    // Security Documents Upload - FIXED TO USE ORIGINAL DATA
     console.log("=== SECURITY DOCUMENTS UPLOAD ===");
     const uploadedSecurityDocuments: Array<Record<string, unknown>> = [];
     
-    if (validatedData.securityDocuments && validatedData.securityDocuments.length > 0) {
-      console.log(`Processing ${validatedData.securityDocuments.length} security documents`);
+    if (originalSecurityDocs && originalSecurityDocs.length > 0) {
+      console.log(`Processing ${originalSecurityDocs.length} security documents`);
       
-      for (let i = 0; i < validatedData.securityDocuments.length; i++) {
-        const doc = validatedData.securityDocuments[i];
+      for (let i = 0; i < originalSecurityDocs.length; i++) {
+        const doc = originalSecurityDocs[i];
         console.log(`Processing security doc ${i}:`, doc);
         
         const file = doc._file;
@@ -494,15 +496,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
 
-    // Financial Details Upload - SAME AS ADD-PASS
+    // Financial Details Upload - FIXED TO USE ORIGINAL DATA
     console.log("=== FINANCIAL DETAILS UPLOAD ===");
     const uploadedFinancialDetails: Array<Record<string, unknown>> = [];
     
-    if (validatedData.financialDetails && validatedData.financialDetails.length > 0) {
-      console.log(`Processing ${validatedData.financialDetails.length} financial details`);
+    if (originalFinancialDetails && originalFinancialDetails.length > 0) {
+      console.log(`Processing ${originalFinancialDetails.length} financial details`);
       
-      for (let i = 0; i < validatedData.financialDetails.length; i++) {
-        const detail = validatedData.financialDetails[i];
+      for (let i = 0; i < originalFinancialDetails.length; i++) {
+        const detail = originalFinancialDetails[i];
         console.log(`Processing financial detail ${i}:`, detail);
         
         const file = detail._file;
@@ -558,10 +560,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Construct the Patch Payload
     const patchPayload: Record<string, unknown> = { ...dataToPatch };
     
-    // Regenerate passId only if the category has changed
+    // Regenerate passId only if the category has changed - FIXED TYPE CONVERSION
     if (existingPass.category !== validatedData.category) {
       const passYear = new Date(validatedData.dateOfEntry).getFullYear().toString();
-      patchPayload.passId = await getNextPassId(validatedData.category, passYear);
+      const newPassId = await getNextPassId(validatedData.category, passYear);
+      patchPayload.passId = newPassId.toString(); // Convert to string
       console.log("Category changed, new passId:", patchPayload.passId);
     }
 
@@ -614,12 +617,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // FIXED: Added Promise type
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params; // await the params
+  const { id } = await params;
   console.log("id = ", id)
   console.log("=== DELETE API ROUTE START ===");
-  console.log("Pass ID to delete:", id); // FIXED: Use id instead of params.id
+  console.log("Pass ID to delete:", id);
   
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

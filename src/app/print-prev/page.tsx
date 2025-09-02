@@ -8,7 +8,7 @@ import Image from 'next/image';
 
 interface Employee {
   _id: string;
-  passId: string;
+  passId: number;
   name: string;
   designation: string;
   organization: string;
