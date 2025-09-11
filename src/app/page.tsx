@@ -410,7 +410,21 @@ async function LoggedOutView() {
             </div>
           </div>
         </div>
-
+{/* Create Case Section */}
+<div className="text-center mb-12">
+  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl shadow-lg border border-green-200 p-8">
+    <h2 className="text-2xl font-bold text-green-900 mb-4">Apply for Airport Entry Pass</h2>
+    <p className="text-green-700 mb-6">
+      Now you can can generate online application for issuance of AFU Cargo and Landside Passes.
+    </p>
+    <a
+      href="/apply"
+      className="inline-flex items-center px-6 py-3 text-lg font-medium rounded-lg shadow-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+    >
+      ✍️ Create a Case
+    </a>
+  </div>
+</div>
         {/* Template Sections */}
         <div className="space-y-8 mb-12">
           {/* Cargo Templates */}

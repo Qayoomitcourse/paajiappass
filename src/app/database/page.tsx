@@ -65,36 +65,22 @@ function ActionsCell({ pass, onDelete, deleteState }: {
   onDelete: (passId: string, passName: string) => Promise<void>; 
   deleteState: DeleteState; 
 }) {
-  // Generate the correct route based on pass category and pass entry year
-  const getViewUrl = () => {
-    // 1. Get the year from the pass's entry date.
-    const year = new Date(pass.dateOfEntry).getFullYear();
-    // 2. Determine the correct path segment based on the category.
-    const categoryPath = pass.category === 'cargo' ? 'cargo-id' : 'landside-id';
-    
-    // 3. Construct the new, clean URL using the Pass ID and Year in the path.
-    return `/${categoryPath}/${pass.passId}/${year}`;
-  };
-
   return (
     <div className="flex space-x-1">
-      <Link
-        href={getViewUrl()}
-        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-green-600 bg-green-100 hover:bg-green-200"
-        title="View Pass Details"
+      {/* Removed View button - clicking row will handle this */}
+      <Link 
+        href={`/add-pass?edit=${pass._id}`} 
+        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-600 bg-blue-100 hover:bg-blue-200"
+        title="Edit Pass"
+        onClick={(e) => e.stopPropagation()} // Prevent row click when clicking edit
       >
-        View
+        Edit
       </Link>
-      {/* FIXED: Edit button now has consistent styling with View and Delete buttons */}
-    <Link 
-      href={`/add-pass?edit=${pass._id}`} 
-      className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-600 bg-blue-100 hover:bg-blue-200"
-      title="Edit Pass"
-    >
-      Edit
-    </Link>
       <button
-        onClick={() => onDelete(pass._id, pass.name || 'Unknown')}
+        onClick={(e) => {
+          e.stopPropagation(); // Prevent row click when clicking delete
+          onDelete(pass._id, pass.name || 'Unknown');
+        }}
         disabled={deleteState.isDeleting && deleteState.deletingId === pass._id}
         className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-600 bg-red-100 hover:bg-red-200 disabled:opacity-50"
         title="Delete Pass"
@@ -189,6 +175,16 @@ export default function DatabasePage() {
     }
     loadData();
   }, [status, router, loadData]);
+
+  // Add helper function to handle row clicks
+  const handleRowClick = (pass: EmployeePass) => {
+    // Get the year from the pass's entry date
+    const year = new Date(pass.dateOfEntry).getFullYear();
+    // Determine the correct path segment based on the category
+    const categoryPath = pass.category === 'cargo' ? 'cargo-id' : 'landside-id';
+    // Navigate to the view page
+    router.push(`/${categoryPath}/${pass.passId}/${year}`);
+  };
 
   const handleDelete = useCallback(async (passId: string, passName: string) => {
     if (!confirm(`Are you sure you want to delete the pass for ${passName}?`)) return;
@@ -453,9 +449,10 @@ export default function DatabasePage() {
   if (error) return <ErrorDisplay error={error} onRetry={loadData} />;
   if (status !== 'authenticated') return <div className="text-center py-10"><p>Access Denied.</p></div>;
 
-  // Updated table headers to include all new fields
+  // Updated table headers to move ACTIONS to the left
   const tableHeaders = [
     'SELECT',
+    'ACTIONS',      // Moved from last to second position
     'CATEGORY', 
     'PASS ID', 
     'PHOTO', 
@@ -473,8 +470,7 @@ export default function DatabasePage() {
     'SECURITY', 
     'AREAS', 
     'ENTRY', 
-    'EXPIRY', 
-    'ACTIONS'
+    'EXPIRY'
   ];
 
   return (
@@ -550,9 +546,13 @@ export default function DatabasePage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {filteredAndSortedPasses.length > 0 ? (
                     filteredAndSortedPasses.map(pass => (
-                      <tr key={pass._id} className={selectedPassIds.has(pass._id) ? 'bg-indigo-50' : ''}>
-                        {/* SELECT */}
-                        <td className="relative w-12 px-6 sm:w-16 sm:px-8">
+                      <tr 
+                        key={pass._id} 
+                        className={`${selectedPassIds.has(pass._id) ? 'bg-indigo-50' : ''} cursor-pointer hover:bg-gray-50 transition-colors`}
+                        onClick={() => handleRowClick(pass)}
+                      >
+                        {/* SELECT - prevent row click when clicking checkbox */}
+                        <td className="relative w-12 px-6 sm:w-16 sm:px-8" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-blue-600"
@@ -560,6 +560,12 @@ export default function DatabasePage() {
                             onChange={(e) => handleSelectSingle(pass._id, e.target.checked)}
                           />
                         </td>
+                        
+                        {/* ACTIONS - moved to second position */}
+                        <td className="whitespace-nowrap px-3 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                          <ActionsCell pass={pass} onDelete={handleDelete} deleteState={deleteState} />
+                        </td>
+
                         {/* CATEGORY */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -570,10 +576,12 @@ export default function DatabasePage() {
                             {pass.category?.toUpperCase()}
                           </span>
                         </td>
+                        
                         {/* PASS ID */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">
                           {formatTablePassId(pass.passId)}
                         </td>
+                        
                         {/* PHOTO */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm">
                           <div className="flex-shrink-0 h-10 w-10">
@@ -586,54 +594,67 @@ export default function DatabasePage() {
                             />
                           </div>
                         </td>
+                        
                         {/* NAME */}
                         <td className="px-3 py-4 text-sm font-medium text-gray-900">
                           {pass.name || 'N/A'}
                         </td>
+                        
                         {/* FATHER'S NAME */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           {pass.fatherName || 'N/A'}
                         </td>
+                        
                         {/* DOB */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                           {formatDateSafely(pass.dateOfBirth)}
                         </td>
+                        
                         {/* PLACE OF BIRTH */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           {pass.placeOfBirth || 'N/A'}
                         </td>
+                        
                         {/* NATIONALITY */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           {pass.nationality || 'N/A'}
                         </td>
+                        
                         {/* DESIGNATION */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           {pass.designation || 'N/A'}
                         </td>
+                        
                         {/* ORGANIZATION */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           {pass.organization || 'N/A'}
                         </td>
+                        
                         {/* ID NUMBER */}
                         <td className="px-3 py-4 text-sm text-gray-500 font-mono">
                           {getIdNumber(pass)}
                         </td>
+                        
                         {/* MOBILE NO */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 font-mono">
                           {pass.mobileNumber || 'N/A'}
                         </td>
+                        
                         {/* PERMANENT ADDRESS */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           <MultiLineCell text={pass.permanentAddress} />
                         </td>
+                        
                         {/* PRESENT ADDRESS */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           <MultiLineCell text={pass.presentAddress} />
                         </td>
+                        
                         {/* SECURITY */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           {formatSecurityClearance(pass.securityClearance)}
                         </td>
+                        
                         {/* AREAS */}
                         <td className="px-3 py-4 text-sm text-gray-500">
                           <div className="max-w-xs">
@@ -643,10 +664,12 @@ export default function DatabasePage() {
                             }
                           </div>
                         </td>
+                        
                         {/* ENTRY */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                           {formatDateSafely(pass.dateOfEntry)}
                         </td>
+                        
                         {/* EXPIRY */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm">
                           <span className={`${
@@ -656,10 +679,6 @@ export default function DatabasePage() {
                           }`}>
                             {formatDateSafely(pass.dateOfExpiry)}
                           </span>
-                        </td>
-                        {/* ACTIONS */}
-                        <td className="whitespace-nowrap px-3 py-4 text-sm">
-                          <ActionsCell pass={pass} onDelete={handleDelete} deleteState={deleteState} />
                         </td>
                       </tr>
                     ))
