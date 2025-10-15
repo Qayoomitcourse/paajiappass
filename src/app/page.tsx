@@ -539,7 +539,7 @@ async function LoggedOutView() {
                 <span className="text-xl">📞</span>
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Phone</h3>
-              <p className="text-gray-600">+92-021-99071626</p>
+              <p className="text-gray-600">+92-021-99071624</p>
             </div>
             <div>
               <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
