@@ -21,7 +21,7 @@ export function Navbar() {
     { href: '/', label: 'Dashboard', icon: '📊' },
     { href: '/add-pass', label: 'Add Pass', icon: '➕' },
     { href: '/database', label: 'Database', icon: '🗃️' },
-    { href: '/bulk-add-passes', label: 'Bulk Add', icon: '📋' },
+    { href: '/scan-cards', label: 'Scan Cards', icon: '📋' },
   ];
 
   // Check if current path is active

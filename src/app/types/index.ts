@@ -58,3 +58,4 @@ export interface Pass {
   photo?: string;
   qrCode?: string;
 }
+

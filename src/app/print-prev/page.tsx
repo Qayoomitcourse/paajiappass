@@ -79,40 +79,86 @@ const IDCardBack_2025 = ({ employee }: { employee: Employee }) => {
 };
 
 
-// --- DESIGN FOR 2026 AND LATER (NEW LAYOUT) ---
+// --- DESIGN FOR 2026 AND LATER (UPDATED LAYOUT) ---
 const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
   const displayPassId = formatDisplayPassId(employee.passId);
   const functionaryYear = new Date(employee.dateOfExpiry).getFullYear();
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
   const qrCodeUrl = `${baseUrl}/${employee.category}-id/${employee.passId}?year=${functionaryYear}`;
-  const headingText = employee.category === 'landside' ? "JIAP KARACHI" : "CARGO COMPLEX";
+  const headingText =
+    employee.category === "landside" ? "JIAP KARACHI" : "CARGO COMPLEX";
 
   return (
-    <div className="w-full h-full bg-white flex flex-col" style={{ fontFamily: "Arial, sans-serif", border: '2px solid black' }}>
-      <div className="text-center text-white font-bold leading-tight" style={{ backgroundColor: '#006400', fontSize: '23px' }}><p>{headingText}</p></div>
-      <div className="text-center font-bold" style={{ backgroundColor: '#006400', color: '#FFD700', fontSize: '20px', whiteSpace: 'nowrap' }}><p>VALID UPTO {formatDate(employee.dateOfExpiry)}</p></div>
+    <div
+      className="w-full h-full bg-white flex flex-col"
+      style={{ fontFamily: "Arial, sans-serif", border: "2px solid black" }}
+    >
+      <div
+        className="text-center text-white font-bold leading-tight"
+        style={{ backgroundColor: "#006400", fontSize: "23px" }}
+      >
+        <p>{headingText}</p>
+      </div>
+
+      <div
+        className="text-center font-bold"
+        style={{
+          backgroundColor: "#006400",
+          color: "#FFD700",
+          fontSize: "20px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <p>VALID UPTO {formatDate(employee.dateOfExpiry)}</p>
+      </div>
+
+      {/* Main Card Content */}
       <div className="flex-1 flex flex-col bg-white p-1 relative">
         <div className="flex justify-between items-start">
-          <div className="flex flex-col items-center" style={{ width: '25mm' }}>
-            <div style={{ width: '25mm', height: '24mm' }}>
-              <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%' }} />
-            </div>
-            <div className="font-bold text-center text-white text-[18px] w-full" style={{backgroundColor: 'red'}}>
-                {functionaryYear}
+          {/* QR Code (kept in previous position) */}
+          <div className="flex flex-col mt-2 items-center" style={{ width: "25mm" }}>
+            <div style={{ width: "25mm", height: "24mm" }}>
+              <QRCodeSVG
+                value={qrCodeUrl}
+                size={90}
+                style={{ width: "100%", height: "100%" }}
+              />
             </div>
           </div>
-          <div className="relative" style={{ width: '30mm', height: '30mm' }}>
-            <div className="absolute -left-5 top-0 flex items-center justify-center" style={{ writingMode: 'vertical-rl', height: '30mm' }}>
-                <div className="font-bold text-[14px] tracking-[2px] transform rotate-180 whitespace-nowrap text-white px-1" style={{backgroundColor: 'red'}}>
-                    FUNCTIONARY
-                </div>
-            </div>
-            <div className="border border-gray-200 rounded overflow-hidden w-full h-full ml-1">
-              {employee.photo ? <Image src={employee.photo} alt={employee.name} width={106} height={113} style={{ width: '100%', height: '100%', objectFit: "cover" }} /> : <div className="text-xs text-center p-1">NO PHOTO</div>}
+
+          {/* Photo */}
+          <div className="relative" style={{ width: "30mm", height: "30mm" }}>
+            <div className="border border-gray-200 rounded overflow-hidden w-full h-full">
+              {employee.photo ? (
+                <Image
+                  src={employee.photo}
+                  alt={employee.name}
+                  width={106}
+                  height={113}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <div className="text-xs text-center p-1">NO PHOTO</div>
+              )}
             </div>
           </div>
         </div>
-        <div className="text-center text-white font-bold leading-tight" style={{ backgroundColor: '#006400', fontSize: '22px' }}><p>{employee.areaAllowed?.join(' | ') || 'N/A'}</p></div>
+
+        {/* Area Allowed */}
+        <div
+          className="text-center text-white font-bold leading-tight"
+          style={{ backgroundColor: "#006400", fontSize: "22px" }}
+        >
+          <p>{employee.areaAllowed?.join(" | ") || "N/A"}</p>
+        </div>
+
+        {/* Person Info */}
         <div className="text-center flex-grow flex flex-col leading-tight mt-1">
           <div>
             <p className="font-bold text-[15px]">{employee.name}</p>
@@ -120,40 +166,136 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
             <p className="font-medium text-[13px]">{employee.organization}</p>
             <p className="font-medium text-[13px]">{employee.cnic}</p>
           </div>
+
           <div className="mt-auto text-right leading-tight">
             <p className="font-bold text-[13px]">Joint Director Vigilance</p>
-            <p className="text-[10px] leading-tight">Pakistan Airports Authority</p>
+            <p className="text-[10px] leading-tight">
+              Pakistan Airports Authority
+            </p>
             <p className="text-[10px] leading-tight">JIAP - Karachi</p>
           </div>
         </div>
+
+        {/* Pass ID */}
         <div className="absolute bottom-0 left-0">
-          <div style={{backgroundColor: '#FFD700'}} className="font-bold px-5 text-center text-[16px]">PASS ID</div>
-          <div className="font-bold px-1 border border-black border-t-0 text-center text-[17px]">{displayPassId}</div>
+          <div
+            style={{ backgroundColor: "#FFD700" }}
+            className="font-bold px-5 text-center text-[16px]"
+          >
+            PASS ID
+          </div>
+          <div className="font-bold px-1 border border-black border-t-0 text-center text-[17px]">
+            {displayPassId}
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
+// --- UPDATED BACK SIDE (FUNCTIONARY + YEAR MOVED HERE) ---
 const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
   const barcodeData = `${formatDisplayPassId(employee.passId)} | ${employee.name} | ${employee.cnic}`;
+  const functionaryYear = new Date(employee.dateOfExpiry).getFullYear();
+
   return (
-    <div className="w-full h-full bg-white flex flex-col" style={{ fontFamily: "Arial, sans-serif", border: '2px solid black', fontSize: '8px' }}>
-        <div className="flex flex-col items-center border-b border-black py-1">
-            <Barcode value={barcodeData} width={0.8} height={25} format="CODE128" displayValue={true} fontSize={8} />
+    <div
+      className="w-full h-full bg-white flex flex-col"
+      style={{
+        fontFamily: "Arial, sans-serif",
+        border: "2px solid black",
+        fontSize: "8px",
+      }}
+    >
+      {/* Top: FUNCTIONARY & YEAR */}
+      <div
+        className="text-center font-bold text-white py-1"
+        style={{ backgroundColor: "red", fontSize: "16px", lineHeight: "1.2" }}
+      >
+        <p>FUNCTIONARY {functionaryYear}</p>
+      </div>
+
+      {/* Barcode */}
+      <div className="flex flex-col items-center border-b border-black py-0">
+        <Barcode
+          value={barcodeData}
+          width={0.8}
+          height={25}
+          format="CODE128"
+          displayValue={true}
+          fontSize={8}
+        />
+      </div>
+
+      {/* Header Row */}
+      <div className="flex items-center justify-between text-black px-1 mt-0">
+        <div className="w-13 h-9 flex items-center">
+          <Image
+            src="/logo.png"
+            alt="Logo"
+            width={52}
+            height={36}
+            className="object-contain"
+          />
         </div>
-        <div className="flex items-center justify-between text-black px-1 mt-1">
-            <div className="w-13 h-9 flex items-center"><Image src="/logo.png" alt="Logo" width={52} height={36} className="object-contain" /></div>
-            <p className="text-center flex-grow text-[24px] font-bold">INSTRUCTIONS</p>
-            <div style={{ width: '52px' }}></div>
+        <p className="text-center flex-grow text-[24px] font-bold">
+          INSTRUCTIONS
+        </p>
+        <div style={{ width: "52px" }}></div>
+      </div>
+
+      {/* Notice */}
+      <div
+        className="text-center border-y border-black"
+        style={{ backgroundColor: "#FFD700" }}
+      >
+        <p className="text-black font-bold text-[11px]">
+          Pass holder is not PAA/Govt employee
+        </p>
+      </div>
+
+      {/* Instructions */}
+      <div className="flex-1 flex flex-col text-justify font-bold leading-tight">
+        <div className="space-y-0.5 px-1">
+          <p className="flex items-start text-[11px]">
+            <span className="mr-1 text-[9px]">➤</span>Pass is only valid if
+            display.
+          </p>
+          <p className="flex items-start text-[11px]">
+            <span className="mr-1 text-[9px]">➤</span>Pass holder is not
+            exempted from body/baggage search.
+          </p>
+          <p className="flex items-start text-[11px]">
+            <span className="mr-1 text-[9px]">➤</span>Do not utilize for other
+            than specified area of Validity / Route indicated in this Pass.
+          </p>
+          <p className="flex items-start text-[11px]">
+            <span className="mr-1 text-[9px]">➤</span>Pass is liable to be
+            cancelled if misused / photo copied / utilized for any other
+            department/individual.
+          </p>
+          <p className="flex items-start text-[11px]">
+            <span className="mr-1 text-[9px]">➤</span>Must be surrendered
+            immediately on relinquishing charge of the post for which issued.
+          </p>
         </div>
-        <div className="text-center border-y border-black" style={{backgroundColor: '#FFD700'}}><p className="text-black font-bold text-[11px]">Pass holder is not PAA/Govt employee</p></div>
-        <div className="flex-1 flex flex-col text-justify font-bold leading-tight">
-            <div className="space-y-0.5 px-1"><p className="flex items-start text-[11px]"><span className="mr-1 text-[9px]">➤</span>Pass is only valid if display.</p><p className="flex items-start text-[11px]"><span className="mr-1 text-[9px]">➤</span>Pass holder is not exempted from body/baggage search.</p><p className="flex items-start text-[11px]"><span className="mr-1 text-[9px]">➤</span>Do not utilize for other than specified area of Validity / Route indicated in this Pass.</p><p className="flex items-start text-[11px]"><span className="mr-1 text-[9px]">➤</span>Pass is liable to be cancelled if misused / photo copied / utilized for any other department/individual.</p><p className="flex items-start text-[11px]"><span className="mr-1 text-[9px]">➤</span>Must be surrendered immediately on relinquishing charge of the post for which issued.</p></div>
-            <div className="mt-auto text-[13px] py-1 text-white text-center" style={{backgroundColor: '#006400'}}><p className="font-semibold leading-tight">If found report immediately to </p><p className="leading-tight">Vigilance Branch JIAP Karachi</p><p className="font-bold leading-tight">021-99071420 & 99071468</p></div>
+
+        {/* Contact Info */}
+        <div
+          className="mt-auto text-[13px] py-1 text-white text-center"
+          style={{ backgroundColor: "#006400" }}
+        >
+          <p className="font-semibold leading-tight">
+            If found report immediately to
+          </p>
+          <p className="leading-tight">Vigilance Branch JIAP Karachi</p>
+          <p className="font-bold leading-tight">021-99071420 & 99071468</p>
         </div>
+      </div>
     </div>
   );
 };
+
 
 export default function PrintCardsPage() {
   const [passIdsInput, setPassIdsInput] = useState('');

@@ -6,6 +6,7 @@ import { client } from '@/sanity/lib/client'
 import SignOutButton from '@/app/components/SignOutButton'
 import SignInButton from '@/app/components/SignInButton';
 import NoticeCarousel from '@/app/components/NoticeCarousel';
+import YearWisePassDistribution from '@/app/components/YearWisePassDistribution';
 
 // Heroicon imports
 import { 
@@ -13,7 +14,6 @@ import {
   CircleStackIcon, 
   PrinterIcon, 
   ArrowRightIcon, 
-  ChartBarIcon, 
   DocumentArrowUpIcon,
   DocumentArrowDownIcon,
   ExclamationTriangleIcon,
@@ -26,7 +26,9 @@ import {
   DocumentTextIcon,
   CloudArrowUpIcon,
   BellIcon,
-  PencilSquareIcon
+  PencilSquareIcon,
+  BanknotesIcon,
+  QrCodeIcon  // Add this line
 } from '@heroicons/react/24/outline';
 
 interface PassCounts {
@@ -69,6 +71,14 @@ interface PublicNotice {
   validUntil?: string;
   _createdAt: string;
   _updatedAt: string;
+}
+
+interface EmployeePass {
+  _id: string;
+  dateOfEntry: string;
+  category: 'cargo' | 'landside';
+  dateOfExpiry?: string;
+  _createdAt: string;
 }
 
 async function getPublicTemplates(): Promise<PublicTemplate[]> {
@@ -117,6 +127,26 @@ async function getPublicNotices(): Promise<PublicNotice[]> {
     return notices || [];
   } catch (error) {
     console.error("Failed to fetch public notices:", error);
+    return [];
+  }
+}
+
+async function getAllPasses(): Promise<EmployeePass[]> {
+  try {
+    const query = `
+      *[_type == "employeePass"] {
+        _id,
+        dateOfEntry,
+        category,
+        dateOfExpiry,
+        _createdAt
+      }
+    `;
+    
+    const passes = await client.fetch(query);
+    return passes || [];
+  } catch (error) {
+    console.error("Failed to fetch passes:", error);
     return [];
   }
 }
@@ -410,21 +440,23 @@ async function LoggedOutView() {
             </div>
           </div>
         </div>
-{/* Create Case Section */}
-<div className="text-center mb-12">
-  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl shadow-lg border border-green-200 p-8">
-    <h2 className="text-2xl font-bold text-green-900 mb-4">Apply for Airport Entry Pass</h2>
-    <p className="text-green-700 mb-6">
-      Now you can can generate online application for issuance of AFU Cargo and Landside Passes.
-    </p>
-    <a
-      href="/apply"
-      className="inline-flex items-center px-6 py-3 text-lg font-medium rounded-lg shadow-md text-white bg-green-600 hover:bg-green-700 transition-colors"
-    >
-      ✍️ Create a Case
-    </a>
-  </div>
-</div>
+
+        {/* Create Case Section */}
+        <div className="text-center mb-12">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl shadow-lg border border-green-200 p-8">
+            <h2 className="text-2xl font-bold text-green-900 mb-4">Apply for Airport Entry Pass</h2>
+            <p className="text-green-700 mb-6">
+              Now you can can generate online application for issuance of AFU Cargo and Landside Passes.
+            </p>
+            <a
+              href="/apply"
+              className="inline-flex items-center px-6 py-3 text-lg font-medium rounded-lg shadow-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+            >
+              ✍️ Create a Case
+            </a>
+          </div>
+        </div>
+
         {/* Template Sections */}
         <div className="space-y-8 mb-12">
           {/* Cargo Templates */}
@@ -539,7 +571,7 @@ async function LoggedOutView() {
                 <span className="text-xl">📞</span>
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Phone</h3>
-              <p className="text-gray-600">+92-021-99071626</p>
+              <p className="text-gray-600">+92-021-99071624</p>
             </div>
             <div>
               <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -553,7 +585,7 @@ async function LoggedOutView() {
                 <span className="text-xl">📍</span>
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Office Hours</h3>
-              <p className="text-gray-600">Mon-Fri: 0:00 AM - 5:00 PM</p>
+              <p className="text-gray-600">Mon-Fri: 09:00 AM - 5:00 PM</p>
             </div>
           </div>
         </div>
@@ -582,45 +614,74 @@ export default async function HomePage() {
   }
 
   const statistics = await getComprehensiveStatistics();
+  const allPasses = await getAllPasses();
 
   const features: Feature[] = [
-    { 
-      name: 'Add New Pass', 
-      href: '/add-pass',
-      description: 'Create a new employee pass record quickly and easily.',
-      icon: PlusCircleIcon,
-      bgColorClass: 'bg-green-100 dark:bg-green-900/50',
-      textColorClass: 'text-green-600 dark:text-green-400',
-      emoji: '➕'
-    },
-    { 
-      name: 'Upload Excel', 
-      href: '/bulk-add-passes',
-      description: 'Bulk import multiple passes from Excel spreadsheet.',
-      icon: DocumentArrowUpIcon,
-      bgColorClass: 'bg-emerald-100 dark:bg-emerald-900/50',
-      textColorClass: 'text-emerald-600 dark:text-emerald-400',
-      emoji: '📊'
-    },
-    { 
-      name: 'View Database', 
-      href: '/database',
-      description: 'Browse, search, and manage all existing passes.',
-      icon: CircleStackIcon,
-      bgColorClass: 'bg-blue-100 dark:bg-blue-900/50',
-      textColorClass: 'text-blue-600 dark:text-blue-400',
-      emoji: '🗃️'
-    },
-    { 
-      name: 'Print ID Cards', 
-      href: '/print-prev',
-      description: 'View gallery and print official identification cards.',
-      icon: PrinterIcon,
-      bgColorClass: 'bg-purple-100 dark:bg-purple-900/50',
-      textColorClass: 'text-purple-600 dark:text-purple-400',
-      emoji: '🖨️'
-    },
-  ];
+  { 
+    name: 'Add New Pass', 
+    href: '/add-pass',
+    description: 'Create a new employee pass record quickly and easily.',
+    icon: PlusCircleIcon,
+    bgColorClass: 'bg-green-100 dark:bg-green-900/50',
+    textColorClass: 'text-green-600 dark:text-green-400',
+    emoji: '➕'
+  },
+  { 
+    name: 'QR Scanner', 
+    href: '/scan-cards',
+    description: 'Scan and verify QR codes or barcodes on ID cards.',
+    icon: QrCodeIcon,
+    bgColorClass: 'bg-cyan-100 dark:bg-cyan-900/50',
+    textColorClass: 'text-cyan-600 dark:text-cyan-400',
+    emoji: '📷'
+  },
+  { 
+    name: 'Pending Application', 
+    href: '/admin/pending',
+    description: 'Review Pending Application and approve / reject.',
+    icon: PlusCircleIcon,
+    bgColorClass: 'bg-green-100 dark:bg-green-900/50',
+    textColorClass: 'text-green-600 dark:text-green-400',
+    emoji: '➕'
+  },
+  { 
+    name: 'Upload Excel', 
+    href: '/bulk-add-passes',
+    description: 'Bulk import multiple passes from Excel spreadsheet.',
+    icon: DocumentArrowUpIcon,
+    bgColorClass: 'bg-emerald-100 dark:bg-emerald-900/50',
+    textColorClass: 'text-emerald-600 dark:text-emerald-400',
+    emoji: '📊'
+  },
+  { 
+    name: 'View Database', 
+    href: '/database',
+    description: 'Browse, search, and manage all existing passes.',
+    icon: CircleStackIcon,
+    bgColorClass: 'bg-blue-100 dark:bg-blue-900/50',
+    textColorClass: 'text-blue-600 dark:text-blue-400',
+    emoji: '🗃️'
+  },
+  { 
+    name: 'Print ID Cards', 
+    href: '/print-prev',
+    description: 'View gallery and print official identification cards.',
+    icon: PrinterIcon,
+    bgColorClass: 'bg-purple-100 dark:bg-purple-900/50',
+    textColorClass: 'text-purple-600 dark:text-purple-400',
+    emoji: '🖨️'
+  },
+  { 
+    name: 'Financial Statistics', 
+    href: '/financial-stats',
+    description: 'View revenue analytics and financial reports.',
+    icon: BanknotesIcon,
+    bgColorClass: 'bg-amber-100 dark:bg-amber-900/50',
+    textColorClass: 'text-amber-600 dark:text-amber-400',
+    emoji: '💰'
+  },
+];
+
 
   const cargoDocuments = [
     { name: "Cargo Pass Application Form", description: "Official cargo area access form", file: "/downloads/cargo/Cargo_Application_Form_Template.pdf", icon: DocumentTextIcon },
@@ -706,7 +767,7 @@ export default async function HomePage() {
         )}
 
         {/* Quick Actions Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-8 sm:mb-10">
           {features.map((feature) => (
             <Link
               key={feature.name}
@@ -737,72 +798,15 @@ export default async function HomePage() {
           ))}
         </div>
 
+        {/* Year-Wise Pass Distribution - NEW SECTION */}
+        <YearWisePassDistribution passes={allPasses} />
+
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8 mb-8">
           
           {/* Statistics Section - Takes 2 columns */}
           <div className="xl:col-span-2 space-y-6">
             
-            {/* Primary Statistics */}
-            <div className="bg-white dark:bg-slate-800/70 rounded-xl shadow-lg dark:shadow-slate-900/50 border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <div className="p-4 sm:p-6">
-                <div className="flex items-center mb-4 sm:mb-6">
-                  <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-amber-100 dark:bg-amber-900/50 rounded-lg mr-3 sm:mr-4">
-                    <ChartBarIcon className="w-6 h-6 text-amber-600 dark:text-amber-400"/>
-                  </div>
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-semibold text-slate-700 dark:text-slate-100">
-                      Pass Distribution Overview
-                    </h2>
-                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                      Current active passes by category
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-                  <div className="p-4 sm:p-5 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg border border-blue-200 dark:border-blue-700/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300">Cargo Passes</p>
-                      <span className="text-lg">🚛</span>
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">
-                      {statistics.counts.cargo.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-1">
-                      {statistics.counts.total > 0 ? Math.round((statistics.counts.cargo / statistics.counts.total) * 100) : 0}% of total
-                    </p>
-                  </div>
-                  
-                  <div className="p-4 sm:p-5 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-lg border border-purple-200 dark:border-purple-700/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs sm:text-sm font-medium text-purple-700 dark:text-purple-300">Landside Passes</p>
-                      <span className="text-lg">🏢</span>
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold text-purple-600 dark:text-purple-400">
-                      {statistics.counts.landside.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-purple-600/70 dark:text-purple-400/70 mt-1">
-                      {statistics.counts.total > 0 ? Math.round((statistics.counts.landside / statistics.counts.total) * 100) : 0}% of total
-                    </p>
-                  </div>
-                  
-                  <div className="p-4 sm:p-5 bg-gradient-to-br from-sky-50 to-sky-100 dark:from-sky-900/30 dark:to-sky-800/30 rounded-lg border border-sky-200 dark:border-sky-700/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs sm:text-sm font-medium text-sky-700 dark:text-sky-300">Total Active</p>
-                      <span className="text-lg">📊</span>
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold text-sky-600 dark:text-sky-400">
-                      {statistics.counts.total.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-sky-600/70 dark:text-sky-400/70 mt-1">
-                      All categories
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Activity & Status Statistics */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
