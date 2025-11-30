@@ -10,13 +10,17 @@ import {
 import {
   CheckCircle2,
   XCircle,
+  AlertTriangle,
   Camera,
+  X,
+  Keyboard,
   Upload,
   User,
   ScanLine,
   Building2,
   Calendar,
   CreditCard,
+  Phone,
   MapPin,
   FileBadge
 } from "lucide-react";
@@ -55,6 +59,7 @@ interface ScanResult {
 export default function ScanCardsPage() {
   // --- State ---
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [manualInput, setManualInput] = useState<string>("");
   const [imageError, setImageError] = useState(false);
@@ -71,7 +76,7 @@ export default function ScanCardsPage() {
   // --- Audio Logic ---
   const playSound = useCallback((status: string) => {
     try {
-      const AudioContext = window.AudioContext || (window as Window & { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext;
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) return;
       
       const audioContext = new AudioContext();
@@ -160,6 +165,7 @@ export default function ScanCardsPage() {
 
     lastScannedRef.current = qrText;
     isScanningRef.current = true;
+    setIsScanning(true);
     setScanResult(null);
     setImageError(false);
 
@@ -246,6 +252,7 @@ export default function ScanCardsPage() {
       scanTimeoutRef.current = setTimeout(() => {
         isScanningRef.current = false;
         lastScannedRef.current = "";
+        setIsScanning(false);
       }, 3000);
     }
   }, [playSound, validatePass]);
@@ -269,7 +276,7 @@ export default function ScanCardsPage() {
       try {
         await html5QrcodeRef.current.stop();
         html5QrcodeRef.current.clear();
-      } catch {
+      } catch (err) {
         console.log("No active scanner to stop");
       }
       html5QrcodeRef.current = null;
