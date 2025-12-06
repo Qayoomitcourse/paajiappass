@@ -1,4 +1,4 @@
-// /app/api/passes/logic.ts
+// /app/api/passes/logic.ts - FIXED VERSION
 
 import { writeClient } from '@/sanity/lib/client';
 import { PassCategory } from '@/app/types';
@@ -12,13 +12,13 @@ import { PassCategory } from '@/app/types';
  * @returns {Promise<number>} The next sequential pass ID for that year.
  */
 export async function getNextPassId(category: PassCategory, year: string): Promise<number> {
-  // --- CORRECTED QUERY SYNTAX ---
-  // The query now uses the proper string::startsWith() function as required by GROQ.
+  // FIXED: Fetch ALL passIds and convert to numbers in JavaScript
+  // because Sanity stores passId as string, and sorting strings gives wrong order
   const query = `
     *[_type == "employeePass" && 
       category == $category && 
       string::startsWith(dateOfEntry, $year)
-    ] | order(passId desc)[0].passId
+    ].passId
   `;
   
   const params = { 
@@ -26,8 +26,20 @@ export async function getNextPassId(category: PassCategory, year: string): Promi
     year, 
   };
 
-  const highestExistingId = await writeClient.fetch<number | null>(query, params);
-  const nextId = (highestExistingId ?? 0) + 1;
+  const allPassIds = await writeClient.fetch<string[]>(query, params);
+  
+  // Convert strings to numbers and find the highest
+  const numericIds = allPassIds
+    .map(id => parseInt(id, 10))
+    .filter(id => !isNaN(id)); // Filter out any invalid conversions
+  
+  const highestExistingId = numericIds.length > 0 
+    ? Math.max(...numericIds) 
+    : 0;
+  
+  const nextId = highestExistingId + 1;
+
+  console.log(`[getNextPassId] Category: ${category}, Year: ${year}, Highest ID: ${highestExistingId}, Next ID: ${nextId}`);
 
   return nextId;
 }

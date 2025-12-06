@@ -1,4 +1,3 @@
-// /app/api/get-passes-by-ids/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/lib/auth';
@@ -9,7 +8,6 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    // Add authentication check
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,24 +16,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { passIds, category, year } = body;
 
-    // Validate that all required parameters were sent from the print page.
+    console.log(`\n--- DEBUG FETCH REQUEST ---`);
+    console.log(`Looking for: Year [${year}], Category [${category}], IDs [${passIds}]`);
+
     if (!Array.isArray(passIds) || passIds.length === 0 || !category || !year) {
-      return NextResponse.json({ error: 'Pass IDs, category, and year are required parameters' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
-    // Sanitize the input to ensure we only query for numbers.
-    const numericPassIds = passIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
-    if (numericPassIds.length === 0) {
-        return NextResponse.json({ error: 'No valid numeric Pass IDs were provided' }, { status: 400 });
-    }
+    // 1. Prepare IDs (Handle both Number 1 and String "0001")
+    const numericIds = passIds.map(id => parseInt(id, 10)).filter(n => !isNaN(n));
+    const stringIds = passIds; // Keep original strings too, just in case
 
-    // The query to find the exact passes for a specific year and category.
-    // Updated to use the same field mapping as the other API route
-    const query = `*[_type == "employeePass" && 
-      category == $category && 
-      string::startsWith(dateOfEntry, $year) &&
-      passId in $numericPassIds
-    ] {
+    // 2. BROAD QUERY: Fetch ALL passes with these IDs (Ignore Year/Category for now)
+    // We will filter in JavaScript. This ensures we don't miss data due to syntax errors.
+    const query = `*[_type == "employeePass" && (passId in $numericIds || passId in $stringIds)] {
       _id,
       passId,
       name,
@@ -44,28 +38,63 @@ export async function POST(request: NextRequest) {
       idNumber,
       cnic,
       dateOfExpiry,
+      dateOfEntry,
       category,
       "photo": photo.asset->url,
       areaAllowed
     }`;
-    
-    const params = {
-      category,
-      year,
-      numericPassIds
-    };
 
-    const employees = await client.fetch<EmployeePass[]>(query, params);
+    const rawEmployees = await client.fetch<EmployeePass[]>(query, { numericIds, stringIds });
 
-    // Map the data to ensure CNIC is properly handled (use idNumber as fallback)
-    const mappedEmployees = employees.map(employee => ({
+    console.log(`> Raw Database Results: Found ${rawEmployees.length} total records for these IDs.`);
+
+    // 3. JAVASCRIPT FILTERING (Strict & Debuggable)
+    const validEmployees = rawEmployees.filter(emp => {
+      // A. Normalize Data
+      const empId = String(emp.passId); // Convert DB ID to string "1"
+      const empCategory = (emp.category || '').toLowerCase().trim(); // "cargo"
+      const targetCategory = category.toLowerCase().trim(); // "cargo"
+      const empExpiry = emp.dateOfExpiry || ''; // "2026-12-31"
+
+      // B. Debug Logs for each record
+      const isIdMatch = passIds.some(reqId => parseInt(reqId) === parseInt(empId));
+      const isCatMatch = empCategory === targetCategory;
+      const isYearMatch = empExpiry.startsWith(year);
+
+      if (!isIdMatch) return false; // Should not happen given the query
+
+      if (!isCatMatch) {
+        console.log(`  X Skipping Pass [${empId}]: Category mismatch (DB: '${empCategory}' vs Req: '${targetCategory}')`);
+        return false;
+      }
+
+      if (!isYearMatch) {
+        console.log(`  X Skipping Pass [${empId}]: Year mismatch (DB Expiry: '${empExpiry}' vs Req Year: '${year}')`);
+        return false;
+      }
+
+      console.log(`  ✓ MATCH: Pass [${empId}] for ${year}`);
+      return true;
+    });
+
+    // 4. Map Data for Response
+    const mappedEmployees = validEmployees.map(employee => ({
       ...employee,
-      cnic: employee.cnic || employee.idNumber || null
+      cnic: employee.cnic || employee.idNumber || 'N/A'
     }));
 
-    // Determine which IDs were found vs. not found and return all the data.
-    const foundIds = new Set(mappedEmployees.map(e => e.passId.toString()));
-    const notFoundIds = passIds.filter(id => !foundIds.has(id));
+    // 5. Calculate Missing IDs
+    const foundDbIds = new Set(mappedEmployees.map(e => String(e.passId)));
+    
+    // Check original inputs against found results
+    const notFoundIds = passIds.filter(rawInputId => {
+        const normalizedInput = String(parseInt(rawInputId, 10));
+        return !foundDbIds.has(normalizedInput);
+    });
+
+    if (notFoundIds.length > 0) {
+      console.log(`> WARNING: Could not find IDs: ${notFoundIds.join(', ')}`);
+    }
 
     return NextResponse.json({
       employees: mappedEmployees,
@@ -75,12 +104,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in /api/get-passes-by-ids:', error);
-    return NextResponse.json(
-        { 
-          error: 'Internal Server Error', 
-          details: error instanceof Error ? error.message : 'Unknown error occurred'
-        }, 
-        { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

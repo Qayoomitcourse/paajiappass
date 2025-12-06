@@ -10,17 +10,13 @@ import {
 import {
   CheckCircle2,
   XCircle,
-  AlertTriangle,
   Camera,
-  X,
-  Keyboard,
   Upload,
   User,
   ScanLine,
   Building2,
   Calendar,
   CreditCard,
-  Phone,
   MapPin,
   FileBadge
 } from "lucide-react";
@@ -56,10 +52,15 @@ interface ScanResult {
   pass?: PassData;
 }
 
+// Helper interface for Webkit Audio Context
+interface WindowWithWebkitAudio extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 export default function ScanCardsPage() {
   // --- State ---
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
+  // Removed 'isScanning' state as it was unused (logic uses isScanningRef)
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [manualInput, setManualInput] = useState<string>("");
   const [imageError, setImageError] = useState(false);
@@ -76,7 +77,7 @@ export default function ScanCardsPage() {
   // --- Audio Logic ---
   const playSound = useCallback((status: string) => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContext = window.AudioContext || (window as unknown as WindowWithWebkitAudio).webkitAudioContext;
       if (!AudioContext) return;
       
       const audioContext = new AudioContext();
@@ -165,7 +166,7 @@ export default function ScanCardsPage() {
 
     lastScannedRef.current = qrText;
     isScanningRef.current = true;
-    setIsScanning(true);
+    // setIsScanning(true); -> Removed unused state update
     setScanResult(null);
     setImageError(false);
 
@@ -252,7 +253,7 @@ export default function ScanCardsPage() {
       scanTimeoutRef.current = setTimeout(() => {
         isScanningRef.current = false;
         lastScannedRef.current = "";
-        setIsScanning(false);
+        // setIsScanning(false); -> Removed unused state update
       }, 3000);
     }
   }, [playSound, validatePass]);
@@ -277,7 +278,7 @@ export default function ScanCardsPage() {
         await html5QrcodeRef.current.stop();
         html5QrcodeRef.current.clear();
       } catch (err) {
-        console.log("No active scanner to stop");
+        console.log("No active scanner to stop", err);
       }
       html5QrcodeRef.current = null;
     }
@@ -319,8 +320,9 @@ export default function ScanCardsPage() {
       html5QrcodeRef.current.clear();
       html5QrcodeRef.current = null;
       setIsCameraActive(false);
-    } catch (err) {
-      console.error("Error stopping camera:", err);
+    } catch (_err) {
+      // Prefixed with underscore to indicate it's intentionally unused/ignored if irrelevant
+      console.error("Error stopping camera", _err);
       // Force cleanup even if stop fails
       html5QrcodeRef.current = null;
       setIsCameraActive(false);

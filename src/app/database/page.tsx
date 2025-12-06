@@ -18,14 +18,11 @@ type SortOrder = 'createdAt_desc' | 'passId_asc' | 'passId_desc' | 'name_asc' | 
 
 // --- THIS IS THE CRASH-PROOF FIX ---
 function getImageUrl(photo: SanityImageSource | null | undefined): string {
-  // 1. If photo is null, undefined, or an object without a valid 'asset', return the placeholder immediately.
   if (!photo || typeof photo !== 'object' || !('asset' in photo) || !photo.asset) {
     return PLACEHOLDER_AVATAR_URL;
   }
-  // 2. Only if it's a valid-looking object, try to build the URL.
   try { 
     const url = urlFor(photo).width(40).height(40).fit('crop').url();
-    // 3. Final check: if the builder somehow returns null or an empty string, use the placeholder.
     return url || PLACEHOLDER_AVATAR_URL;
   } 
   catch { 
@@ -41,9 +38,26 @@ function formatDateSafely(dateString: string | null | undefined): string {
   catch { return 'Invalid Date'; }
 }
 
-// Replace the existing getIdNumber function in your database page
+// --- NEW HELPER FUNCTION FOR YEAR CALCULATION ---
+function getPassYear(entryDate: string | null | undefined, expiryDate: string | null | undefined): string {
+  if (!entryDate) return 'N/A';
+  try {
+    const startYear = new Date(entryDate).getFullYear();
+    // If we have an expiry date, check if it falls in a different year
+    if (expiryDate) {
+      const endYear = new Date(expiryDate).getFullYear();
+      // If years are different, show range (e.g., 2023-2024), otherwise just 2023
+      if (startYear !== endYear) {
+        return `${startYear}-${endYear}`;
+      }
+    }
+    return startYear.toString();
+  } catch {
+    return 'N/A';
+  }
+}
+
 function getIdNumber(pass: EmployeePass): string {
-  // Check new field first, then legacy field
   return pass.idNumber || pass.cnic || 'N/A';
 }
 
@@ -67,18 +81,17 @@ function ActionsCell({ pass, onDelete, deleteState }: {
 }) {
   return (
     <div className="flex space-x-1">
-      {/* Removed View button - clicking row will handle this */}
       <Link 
         href={`/add-pass?edit=${pass._id}`} 
         className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-blue-600 bg-blue-100 hover:bg-blue-200"
         title="Edit Pass"
-        onClick={(e) => e.stopPropagation()} // Prevent row click when clicking edit
+        onClick={(e) => e.stopPropagation()} 
       >
         Edit
       </Link>
       <button
         onClick={(e) => {
-          e.stopPropagation(); // Prevent row click when clicking delete
+          e.stopPropagation(); 
           onDelete(pass._id, pass.name || 'Unknown');
         }}
         disabled={deleteState.isDeleting && deleteState.deletingId === pass._id}
@@ -114,7 +127,8 @@ function LoadingSkeleton() {
 function EmptyState({ year, category, search }: { year: string; category: string; search: string; }) {
   return (
     <tr>
-      <td colSpan={19} className="px-6 py-14 text-center">
+      {/* Updated colSpan from 19 to 20 to account for new Year column */}
+      <td colSpan={20} className="px-6 py-14 text-center">
         <div className="space-y-2">
           <p className="text-gray-500">No passes found</p>
           {(year !== 'all' || category !== 'all' || search) && (
@@ -176,13 +190,9 @@ export default function DatabasePage() {
     loadData();
   }, [status, router, loadData]);
 
-  // Add helper function to handle row clicks
   const handleRowClick = (pass: EmployeePass) => {
-    // Get the year from the pass's entry date
     const year = new Date(pass.dateOfEntry).getFullYear();
-    // Determine the correct path segment based on the category
     const categoryPath = pass.category === 'cargo' ? 'cargo-id' : 'landside-id';
-    // Navigate to the view page
     router.push(`/${categoryPath}/${pass.passId}/${year}`);
   };
 
@@ -229,14 +239,11 @@ export default function DatabasePage() {
         ? filteredAndSortedPasses.filter(pass => selectedPassIds.has(pass._id))
         : filteredAndSortedPasses;
       
-      console.log('Generating PDF for', passesToDownload.length, 'passes');
-      
       if (passesToDownload.length === 0) {
         alert('No passes to export. Please select passes or adjust your filters.');
         return;
       }
 
-      // Show a loading indicator
       const loadingToast = document.createElement('div');
       loadingToast.innerHTML = `
         <div style="position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
@@ -245,129 +252,62 @@ export default function DatabasePage() {
             Generating PDF... (${passesToDownload.length} records)
           </div>
         </div>
-        <style>
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        </style>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
       `;
       document.body.appendChild(loadingToast);
 
       const response = await fetch('/api/generate-pdf', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ passes: passesToDownload }),
       });
 
-      console.log('PDF API response status:', response.status);
-      console.log('PDF API response headers:', Object.fromEntries(response.headers.entries()));
-
-      // Remove loading toast
       document.body.removeChild(loadingToast);
 
       if (!response.ok) {
         let errorMessage = `HTTP ${response.status}: Failed to generate PDF`;
-        
         try {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
-          if (errorData.details) {
-            console.error('PDF generation error details:', errorData.details);
-          }
-        } catch (parseError) {
-          console.error('Could not parse error response:', parseError);
-        }
-        
+        } catch {}
         throw new Error(errorMessage);
       }
       
-      // Check if response is actually a PDF
       const contentType = response.headers.get('content-type');
-      console.log('Response content type:', contentType);
-      
       if (!contentType?.includes('application/pdf')) {
-        console.error('Response is not a PDF:', contentType);
-        
-        // Try to read as text to see what we got
-        const textResponse = await response.clone().text();
-        console.error('Response content (first 500 chars):', textResponse.substring(0, 500));
-        
         throw new Error(`Server returned invalid content type: ${contentType}. Expected PDF.`);
       }
 
       const blob = await response.blob();
-      console.log('PDF blob size:', blob.size, 'bytes');
-      
-      if (blob.size === 0) {
-        throw new Error('Generated PDF is empty');
-      }
+      if (blob.size === 0) throw new Error('Generated PDF is empty');
 
-      // Verify it's a valid PDF by checking the header
-      const arrayBuffer = await blob.slice(0, 5).arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const pdfHeader = Array.from(uint8Array).map(byte => String.fromCharCode(byte)).join('');
-      
-      if (!pdfHeader.startsWith('%PDF')) {
-        console.error('Invalid PDF header:', pdfHeader);
-        throw new Error('Generated file is not a valid PDF');
-      }
-
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
       a.download = `paa-passes-${selectedOnly ? 'selected' : 'all'}-${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.pdf`;
       
-      // Trigger download
       document.body.appendChild(a);
       a.click();
       
-      // Cleanup
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
-        if (document.body.contains(a)) {
-          document.body.removeChild(a);
-        }
+        if (document.body.contains(a)) document.body.removeChild(a);
       }, 100);
       
-      console.log('PDF download initiated successfully');
-
-      // Show success message
       const successToast = document.createElement('div');
       successToast.innerHTML = `
         <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-          ✅ PDF generated successfully! (${passesToDownload.length} records)
+          ✅ PDF generated successfully!
         </div>
       `;
       document.body.appendChild(successToast);
-      
-      setTimeout(() => {
-        if (document.body.contains(successToast)) {
-          document.body.removeChild(successToast);
-        }
-      }, 3000);
+      setTimeout(() => document.body.removeChild(successToast), 3000);
 
     } catch (err) {
       console.error('Error generating PDF:', err);
-      
-      // Show error message
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      const errorToast = document.createElement('div');
-      errorToast.innerHTML = `
-        <div style="position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 12px 24px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 400px;">
-          <div style="font-weight: 600; margin-bottom: 4px;">❌ PDF Generation Failed</div>
-          <div style="font-size: 14px; opacity: 0.9;">${errorMessage}</div>
-        </div>
-      `;
-      document.body.appendChild(errorToast);
-      
-      setTimeout(() => {
-        if (document.body.contains(errorToast)) {
-          document.body.removeChild(errorToast);
-        }
-      }, 5000);
-      
+      alert(`PDF Generation Failed: ${errorMessage}`);
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -449,10 +389,10 @@ export default function DatabasePage() {
   if (error) return <ErrorDisplay error={error} onRetry={loadData} />;
   if (status !== 'authenticated') return <div className="text-center py-10"><p>Access Denied.</p></div>;
 
-  // Updated table headers to move ACTIONS to the left
+  // Updated headers to include YEAR
   const tableHeaders = [
     'SELECT',
-    'ACTIONS',      // Moved from last to second position
+    'ACTIONS',
     'CATEGORY', 
     'PASS ID', 
     'PHOTO', 
@@ -468,7 +408,8 @@ export default function DatabasePage() {
     'PERMANENT ADDRESS',
     'PRESENT ADDRESS',
     'SECURITY', 
-    'AREAS', 
+    'AREAS',
+    'YEAR', // <--- Added YEAR header
     'ENTRY', 
     'EXPIRY'
   ];
@@ -551,7 +492,7 @@ export default function DatabasePage() {
                         className={`${selectedPassIds.has(pass._id) ? 'bg-indigo-50' : ''} cursor-pointer hover:bg-gray-50 transition-colors`}
                         onClick={() => handleRowClick(pass)}
                       >
-                        {/* SELECT - prevent row click when clicking checkbox */}
+                        {/* SELECT */}
                         <td className="relative w-12 px-6 sm:w-16 sm:px-8" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
@@ -561,7 +502,7 @@ export default function DatabasePage() {
                           />
                         </td>
                         
-                        {/* ACTIONS - moved to second position */}
+                        {/* ACTIONS */}
                         <td className="whitespace-nowrap px-3 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
                           <ActionsCell pass={pass} onDelete={handleDelete} deleteState={deleteState} />
                         </td>
@@ -663,6 +604,11 @@ export default function DatabasePage() {
                               : 'N/A'
                             }
                           </div>
+                        </td>
+
+                         {/* --- NEW YEAR COLUMN --- */}
+                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900 font-semibold">
+                          {getPassYear(pass.dateOfEntry, pass.dateOfExpiry)}
                         </td>
                         
                         {/* ENTRY */}
