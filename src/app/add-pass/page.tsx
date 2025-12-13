@@ -36,12 +36,38 @@ interface PassFormData {
   securityClearance: string;
 }
 
-// Interface for the data coming from Sanity
+// Updated interface to handle fetched document structure
+interface FetchedDocument {
+  _key: string;
+  docType: 'special_branch' | 'local_police';
+  certificateNumber: string;
+  issueDate?: string;
+  asset?: { _ref: string }; 
+  file?: { asset: { _ref: string } };
+}
+
+// Updated interface to handle fetched financial structure
+interface FetchedFinancialDetail {
+  _key: string;
+  receiptNumber: string;
+  totalAmount: string;
+  dateOfPayment: string;
+  bank: 'HBL' | 'NBP' | 'OTHER';
+  paymentMethod: 'CASH' | 'CHEQUE' | 'ONLINE_TRANSFER' | 'BANK_DRAFT';
+  chequeNumber?: string;
+  isMultipleEmployees?: boolean;
+  employeeCount?: number;
+  amountPerEmployee?: string;
+  remarks?: string;
+  // Sanity image field usually looks like this
+  receiptImage?: { asset?: { _ref: string }; _ref?: string }; 
+}
+
 interface FetchedPassData extends Partial<PassFormData> {
   _id: string;
   photo?: { asset: { _ref: string } };
-  securityDocuments?: unknown[]; // Changed from any[] to unknown[]
-  financialDetails?: unknown[];  // Changed from any[] to unknown[]
+  securityDocuments?: FetchedDocument[];
+  financialDetails?: FetchedFinancialDetail[];
   isExempt?: boolean;
   exemptionRemarks?: string;
 }
@@ -53,8 +79,6 @@ interface SecurityDocument {
   certificateNumber: string;
   id: string;
   issueDate?: string;
-  
-  // Lookup States
   isChecking: boolean;
   useExisting: boolean;
   existingDocId?: string;
@@ -76,8 +100,6 @@ interface FinancialDetails {
   receiptImage?: File | null;
   receiptPreview?: string | null;
   id: string;
-
-  // Lookup States
   isChecking: boolean;
   useExisting: boolean;
   existingDocId?: string;
@@ -106,10 +128,10 @@ function AddPassPage() {
 
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  
+  const [existingPhotoRef, setExistingPhotoRef] = useState<string | null>(null);
+
   const [securityDocuments, setSecurityDocuments] = useState<SecurityDocument[]>([]);
   const [financialDetails, setFinancialDetails] = useState<FinancialDetails[]>([]);
-  
   const [isExempt, setIsExempt] = useState(false);
   const [exemptionRemarks, setExemptionRemarks] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -123,14 +145,12 @@ function AddPassPage() {
     isLoading: false, hasData: false, message: ''
   });
   
-  // Timeout refs for debouncing lookups
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const securityCheckTimeoutRef = useRef<{[key: string]: NodeJS.Timeout}>({});
   const financialCheckTimeoutRef = useRef<{[key: string]: NodeJS.Timeout}>({});
 
   const resetFormFields = useCallback((idToKeep: string = '', forceReset: boolean = false) => {
     if (!forceReset && submitAttempted && error) return;
-
     setFormData({
       name: '', fatherName: '', idNumber: idToKeep, dateOfBirth: '', placeOfBirth: '',
       nationality: 'Pakistani', mobileNumber: '', permanentAddress: '', presentAddress: '',
@@ -139,6 +159,7 @@ function AddPassPage() {
     });
     setPhoto(null);
     setPhotoPreview(null);
+    setExistingPhotoRef(null);
     setSecurityDocuments([]);
     setFinancialDetails([]);
     setIsExempt(false);
@@ -148,40 +169,65 @@ function AddPassPage() {
     setSubmitAttempted(false);
   }, [submitAttempted, error]);
 
-  // --- 1. Security Document Check Logic ---
   const checkSecurityDocument = async (id: string, certNumber: string, docType: string) => {
     if (!certNumber || certNumber.length < 3) return;
-
+    
     // Set loading state
     setSecurityDocuments(prev => prev.map(doc => 
       doc.id === id ? { ...doc, isChecking: true, foundMessage: undefined } : doc
     ));
 
     try {
-      // API call to check if document exists
       const response = await fetch(`/api/check-document?type=security&subtype=${docType}&number=${encodeURIComponent(certNumber)}`);
       const data = await response.json();
 
+      console.log(`🔍 Check Security [${certNumber}] Response:`, data); // Debug Log
+
       setSecurityDocuments(prev => prev.map(doc => {
         if (doc.id !== id) return doc;
-        
+
         if (data.found && data.document) {
+          // === SMART IMAGE FINDER ===
+          // 1. Try direct URL from API
+          let previewUrl = data.document.imageUrl;
+          let assetRef = data.document.asset?._ref;
+
+          // 2. If no direct URL, look for nested assets to generate one
+          if (!previewUrl) {
+            // Check various locations where the asset might be hidden
+            const possibleAsset = 
+              data.document.asset || 
+              data.document.file?.asset || 
+              data.document.document?.asset ||
+              data.document.image?.asset;
+
+            if (possibleAsset?._ref) {
+              assetRef = possibleAsset._ref;
+              previewUrl = urlFor({ asset: { _ref: assetRef } }).url();
+            }
+          }
+
+          // 3. Fallback date
+          const foundDate = data.document.date || data.document.issueDate || doc.issueDate;
+
           return {
             ...doc,
             isChecking: false,
-            useExisting: true,
-            existingDocId: data.document._id,
-            preview: data.document.imageUrl || null,
-            issueDate: data.document.date || doc.issueDate,
+            useExisting: true, // Mark as existing
+            existingDocId: assetRef || data.document._id, // Prefer asset ID, fallback to doc ID
+            preview: previewUrl || null,
+            issueDate: foundDate,
             foundMessage: 'Reference found! Linked to existing certificate.'
           };
         } else {
+          // Not found
           return {
             ...doc,
             isChecking: false,
             useExisting: false,
             existingDocId: undefined,
-            preview: doc.useExisting ? null : doc.preview,
+            // Keep existing preview if user manually uploaded one, else null
+            preview: doc.file ? doc.preview : null, 
             foundMessage: undefined
           };
         }
@@ -196,19 +242,15 @@ function AddPassPage() {
     setSecurityDocuments(prev => prev.map(doc => 
       doc.id === id ? { ...doc, certificateNumber: value } : doc
     ));
-
     if (securityCheckTimeoutRef.current[id]) clearTimeout(securityCheckTimeoutRef.current[id]);
-    
     securityCheckTimeoutRef.current[id] = setTimeout(() => {
       const doc = securityDocuments.find(d => d.id === id);
       if (doc) checkSecurityDocument(id, value, doc.docType);
     }, 800);
   };
 
-  // --- 2. Financial Receipt Check Logic ---
   const checkFinancialDocument = async (id: string, receiptNo: string) => {
     if (!receiptNo || receiptNo.length < 2) return;
-
     setFinancialDetails(prev => prev.map(det => 
       det.id === id ? { ...det, isChecking: true, foundMessage: undefined } : det
     ));
@@ -219,7 +261,6 @@ function AddPassPage() {
 
       setFinancialDetails(prev => prev.map(det => {
         if (det.id !== id) return det;
-
         if (data.found && data.document) {
           return {
             ...det,
@@ -250,27 +291,19 @@ function AddPassPage() {
     }
   };
 
-  // Used by the input field to debounce the check
   const handleReceiptNumberChange = (id: string, value: string) => {
-    // 1. Update text immediately
     setFinancialDetails(prev => prev.map(det => 
       det.id === id ? { ...det, receiptNumber: value } : det
     ));
-
-    // 2. Debounce API check
     if (financialCheckTimeoutRef.current[id]) clearTimeout(financialCheckTimeoutRef.current[id]);
-
     financialCheckTimeoutRef.current[id] = setTimeout(() => {
       checkFinancialDocument(id, value);
     }, 800);
   };
 
-  // --- Standard Form Logic (Fetch ID, Edit Mode, etc) ---
-
   const fetchPassByIdNumber = useCallback(async (idNumber: string) => {
     setAutoFillStatus({ isLoading: false, hasData: false, message: '' });
     if (idNumber.length < 8) { resetFormFields(idNumber); return; }
-
     setAutoFillStatus({ isLoading: true, hasData: false, message: 'Searching...' });
     setError(null);
 
@@ -301,6 +334,10 @@ function AddPassPage() {
 
         if (pass.photo?.asset) {
           setPhotoPreview(urlFor(pass.photo).url());
+          setExistingPhotoRef(pass.photo.asset._ref);
+        } else {
+          setPhotoPreview(null);
+          setExistingPhotoRef(null);
         }
 
         setAutoFillStatus({ isLoading: false, hasData: true, message: `Found previous pass: ${pass.passId}` });
@@ -319,14 +356,18 @@ function AddPassPage() {
     timeoutRef.current = setTimeout(() => fetchPassByIdNumber(idNumber), 500);
   }, [fetchPassByIdNumber]);
 
-  // Load Edit Data
+  // === CRITICAL FIX: Load Data for Edit Mode correctly ===
+  // === UPDATED DATA FETCHING FOR EDIT MODE ===
   useEffect(() => {
     if (isEditMode && editId) {
       setIsLoading(true);
       const fetchPassData = async () => {
         try {
+          // Ensure your GROQ query requests all fields, including nested assets
           const pass = await client.fetch<FetchedPassData>(`*[_type == "employeePass" && _id == $id][0]`, { id: editId });
           
+          console.log("🔥 FULL FETCHED DATA:", pass); // Check your browser console for this!
+
           if (pass) {
             setFormData({
               name: pass.name || '',
@@ -347,8 +388,86 @@ function AddPassPage() {
               securityClearance: pass.securityClearance || 'na',
             });
 
-            if (pass.photo) {
+            // 1. Map Photo
+            if (pass.photo?.asset) {
               setPhotoPreview(urlFor(pass.photo).url());
+              setExistingPhotoRef(pass.photo.asset._ref);
+            }
+
+            // 2. Map Security Documents (ROBUST VERSION)
+            if (pass.securityDocuments && Array.isArray(pass.securityDocuments)) {
+              console.log("🔍 Raw Security Docs from DB:", pass.securityDocuments);
+
+              const mappedDocs: SecurityDocument[] = pass.securityDocuments.map((doc: any, index: number) => {
+                // --- SMART ASSET FINDER ---
+                // We check multiple possible locations for the image asset
+                let assetRef = doc.asset?._ref || doc.file?.asset?._ref;
+                let docObject = null;
+
+                // 1. Direct Asset
+                if (doc.asset) docObject = { asset: doc.asset };
+                // 2. File Asset
+                else if (doc.file?.asset) docObject = { asset: doc.file.asset };
+                // 3. Common Field Names (Adjust if your schema is different)
+                else if (doc.image?.asset) {
+                   assetRef = doc.image.asset._ref;
+                   docObject = doc.image;
+                }
+                else if (doc.scannedImage?.asset) {
+                   assetRef = doc.scannedImage.asset._ref;
+                   docObject = doc.scannedImage;
+                }
+
+                console.log(`Security Doc ${index} -> Found Asset Ref:`, assetRef);
+
+                return {
+                  id: doc._key || `existing-sec-${index}`,
+                  docType: doc.docType || 'special_branch', // Default if missing
+                  certificateNumber: doc.certificateNumber || '', // Safety fix
+                  issueDate: doc.issueDate || '',
+                  isChecking: false,
+                  useExisting: !!assetRef, // TRUE if we found an asset
+                  existingDocId: assetRef,
+                  preview: docObject ? urlFor(docObject).url() : null,
+                  file: null,
+                  foundMessage: assetRef ? 'Loaded from existing record' : undefined
+                };
+              });
+              setSecurityDocuments(mappedDocs);
+              
+              // Ensure the radio button matches the docs found
+              if (mappedDocs.length > 0 && mappedDocs[0].docType) {
+                setFormData(prev => ({ ...prev, securityClearance: mappedDocs[0].docType }));
+              }
+            }
+
+            // 3. Map Financial Details
+            if (pass.financialDetails && Array.isArray(pass.financialDetails)) {
+              const mappedFinancials: FinancialDetails[] = pass.financialDetails.map((det, index) => {
+                const assetRef = det.receiptImage?.asset?._ref || det.receiptImage?._ref;
+                const imgObject = assetRef ? { asset: { _ref: assetRef } } : null;
+
+                return {
+                  id: det._key || `existing-fin-${index}`,
+                  receiptNumber: det.receiptNumber || '',
+                  totalAmount: det.totalAmount || '',
+                  dateOfPayment: det.dateOfPayment || '',
+                  bank: det.bank || 'HBL',
+                  paymentMethod: det.paymentMethod || 'CASH',
+                  chequeNumber: det.chequeNumber,
+                  isMultipleEmployees: det.isMultipleEmployees || false,
+                  employeeCount: det.employeeCount || 1,
+                  amountPerEmployee: det.amountPerEmployee,
+                  remarks: det.remarks,
+                  isChecking: false,
+                  useExisting: !!assetRef, 
+                  existingDocId: assetRef,
+                  receiptPreview: imgObject ? urlFor(imgObject).url() : null,
+                  receiptImage: null,
+                  foundMessage: assetRef ? 'Loaded from existing record' : undefined
+                };
+              });
+              setFinancialDetails(mappedFinancials);
             }
 
             if (pass.isExempt) {
@@ -395,6 +514,7 @@ function AddPassPage() {
     if (file && file.type.startsWith('image/')) {
       setPhoto(file);
       setPhotoPreview(URL.createObjectURL(file));
+      setExistingPhotoRef(null); 
       setError(null);
     } else {
       setError('Invalid file type.');
@@ -405,7 +525,6 @@ function AddPassPage() {
     if (e.target.files?.[0]) processFile(e.target.files[0]);
   };
 
-  // --- Security UI Helper Functions ---
   const addSecurityDocument = () => {
     if (formData.securityClearance === 'na') return setError('Select security clearance type first.');
     setSecurityDocuments(prev => [...prev, {
@@ -422,7 +541,6 @@ function AddPassPage() {
     setSecurityDocuments(prev => prev.map(doc => doc.id === id ? { ...doc, file, preview: URL.createObjectURL(file), useExisting: false, existingDocId: undefined } : doc));
   };
 
-  // --- Financial UI Helper Functions ---
   const addFinancialDetail = () => {
     setFinancialDetails(prev => [...prev, {
       receiptNumber: '', totalAmount: '', dateOfPayment: '', bank: 'HBL',
@@ -451,7 +569,6 @@ function AddPassPage() {
     if (formData.areaAllowed.length === 0) return setError("Select at least one area.");
     if (formData.securityClearance !== 'na' && securityDocuments.length === 0) return setError("Upload security docs.");
 
-    // Validate
     for (const doc of securityDocuments) {
        if (!doc.certificateNumber) return setError("Enter Certificate Number for all security docs.");
        if (!doc.useExisting && !doc.file && !doc.preview) return setError("Upload image for all security docs.");
@@ -469,14 +586,19 @@ function AddPassPage() {
     setSuccessMessage(null);
 
     const submissionFormData = new FormData();
-    // Append standard fields
     Object.entries(formData).forEach(([key, value]) => {
       if (key === 'areaAllowed') (value as string[]).forEach(area => submissionFormData.append('areaAllowed', area));
       else submissionFormData.append(key, value as string);
     });
-    if (photo) submissionFormData.append('photo', photo);
+    
+    // Photo handling
+    if (photo) {
+      submissionFormData.append('photo', photo);
+    } else if (existingPhotoRef) {
+      submissionFormData.append('existingPhotoRef', existingPhotoRef);
+    }
 
-    // Append Security
+    // Security Documents handling
     securityDocuments.forEach((doc, index) => {
       submissionFormData.append(`securityDocumentType_${index}`, doc.docType);
       submissionFormData.append(`securityDocumentDate_${index}`, doc.issueDate || '');
@@ -490,7 +612,7 @@ function AddPassPage() {
       }
     });
 
-    // Append Financial
+    // Financial Details handling
     if (!isExempt) {
       financialDetails.forEach((detail, index) => {
         submissionFormData.append(`financialDetail_${index}_receiptNumber`, detail.receiptNumber);
@@ -502,6 +624,13 @@ function AddPassPage() {
         submissionFormData.append(`financialDetail_${index}_id`, detail.id);
         if (detail.employeeCount) submissionFormData.append(`financialDetail_${index}_employeeCount`, detail.employeeCount.toString());
         if (detail.amountPerEmployee) submissionFormData.append(`financialDetail_${index}_amountPerEmployee`, detail.amountPerEmployee);
+
+        // Debug: Log what we are sending for this financial detail
+        console.log(`Submitting Financial Detail ${index}:`, {
+            useExisting: detail.useExisting,
+            existingDocId: detail.existingDocId,
+            hasNewFile: !!detail.receiptImage
+        });
 
         if (detail.useExisting && detail.existingDocId) {
              submissionFormData.append(`financialDetailRefId_${index}`, detail.existingDocId);
@@ -539,237 +668,537 @@ function AddPassPage() {
   if (!session) return <div className="text-center py-10">Access Denied.</div>;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md my-8">
-      <h1 className="text-2xl font-bold text-gray-700 mb-6">{isEditMode ? 'Edit Employee Pass' : 'Add New Employee Pass'}</h1>
+    <div className="max-w-6xl mx-auto p-6 bg-gray-50 min-h-screen">
+      <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          {isEditMode ? 'Edit Employee Pass' : 'Add New Employee Pass'}
+        </h1>
+        <p className="text-gray-600 text-sm mb-6">Fill in the employee details and upload required documents</p>
 
-      {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded break-words">{error}</div>}
-      {successMessage && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">{successMessage}</div>}
-
-      <form onSubmit={handleSubmit} className="space-y-8">
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+            <div className="flex items-start">
+              <svg className="w-5 h-5 text-red-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <p className="ml-3 text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
         
-        {/* Personal Details */}
-        <section className="space-y-4 p-4 border rounded-md">
-          <h2 className="text-lg font-semibold text-gray-600 border-b pb-2">Personal Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Passport / CNIC <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <input type="text" name="idNumber" value={formData.idNumber} onChange={handleInputChange} required className="mt-1 block w-full input-style pr-10" />
-                {autoFillStatus.isLoading && <div className="absolute right-3 top-2 spinner" />}
-              </div>
-              {autoFillStatus.message && <p className="text-xs mt-1 text-green-600">{autoFillStatus.message}</p>}
-            </div>
-            <div><label className="block text-sm font-medium text-gray-700">Name <span className="text-red-500">*</span></label><input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Father Name</label><input type="text" name="fatherName" value={formData.fatherName} onChange={handleInputChange} className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Date of Birth</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleInputChange} className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Place of Birth</label><input type="text" name="placeOfBirth" value={formData.placeOfBirth} onChange={handleInputChange} className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Nationality</label><input type="text" name="nationality" value={formData.nationality} onChange={handleInputChange} className="mt-1 block w-full input-style" /></div>
-          </div>
-        </section>
-
-        {/* Contact Address */}
-        <section className="space-y-4 p-4 border rounded-md">
-            <div><label className="block text-sm font-medium text-gray-700">Mobile</label><input type="text" name="mobileNumber" value={formData.mobileNumber} onChange={handleInputChange} className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Present Address</label><textarea name="presentAddress" value={formData.presentAddress} onChange={handleInputChange} className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Permanent Address</label><textarea name="permanentAddress" value={formData.permanentAddress} onChange={handleInputChange} className="mt-1 block w-full input-style" /></div>
-        </section>
-
-        {/* Employment */}
-        <section className="space-y-4 p-4 border rounded-md">
-          <h2 className="text-lg font-semibold text-gray-600 border-b pb-2">Employment & Pass Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div><label className="block text-sm font-medium text-gray-700">Designation <span className="text-red-500">*</span></label><input type="text" name="designation" value={formData.designation} onChange={handleInputChange} required className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Organization <span className="text-red-500">*</span></label><input type="text" name="organization" value={formData.organization} onChange={handleInputChange} required className="mt-1 block w-full input-style" /></div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Category</label>
-              <select name="category" value={formData.category} onChange={handleInputChange} className="mt-1 block w-full input-style"><option value="cargo">Cargo</option><option value="landside">Landside</option></select>
-            </div>
-             <div>
-              <label className="block text-sm font-medium text-gray-700">Pass Year</label>
-              <select value={selectedYear} onChange={handleYearChange} disabled={isEditMode} className="mt-1 block w-full input-style">
-                <option value="">Manual Dates</option>
-                {Array.from({length: 5}, (_, i) => currentYear + i).map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            <div><label className="block text-sm font-medium text-gray-700">Entry</label><input type="date" name="dateOfEntry" value={formData.dateOfEntry} onChange={handleInputChange} required className="mt-1 block w-full input-style" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Expiry</label><input type="date" name="dateOfExpiry" value={formData.dateOfExpiry} onChange={handleInputChange} required className="mt-1 block w-full input-style" /></div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Areas Allowed <span className="text-red-500">*</span></label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {availableAreas.map(area => (
-                <label key={area} className="flex items-center space-x-2 p-2 border rounded-md hover:bg-gray-50 cursor-pointer">
-                  <input type="checkbox" checked={formData.areaAllowed.includes(area)} onChange={handleAreaChange} value={area} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-                  <span className="text-sm text-gray-700">{area}</span>
-                </label>
-              ))}
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+            <div className="flex items-start">
+              <svg className="w-5 h-5 text-green-500 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <p className="ml-3 text-sm text-green-700">{successMessage}</p>
             </div>
           </div>
-        </section>
+        )}
 
-        {/* --- SECURITY SECTION (Updated) --- */}
-        <section className="space-y-4 p-4 border rounded-md">
-          <h2 className="text-lg font-semibold text-gray-600 border-b pb-2">Security & Documents</h2>
-          <div>
-             <label className="block text-sm font-medium text-gray-700 mb-2">Security Clearance</label>
-             <div className="flex gap-4 mb-4">
-                {[{v:'special_branch',l:'Special Branch'}, {v:'local_police',l:'Local Police'}, {v:'na',l:'N/A'}].map(o=>(
-                   <label key={o.v} className="flex items-center"><input type="radio" name="securityClearance" value={o.v} checked={formData.securityClearance===o.v} onChange={handleInputChange} className="h-4 w-4 text-blue-600"/><span className="ml-2 text-sm">{o.l}</span></label>
-                ))}
-             </div>
-          </div>
-
-          {formData.securityClearance !== 'na' && (
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <label className="block text-sm font-medium text-gray-700">Security Documents</label>
-                <button type="button" onClick={addSecurityDocument} className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">Add Document</button>
-              </div>
-
-              {securityDocuments.map((doc, index) => (
-                <div key={doc.id} className="border rounded-md p-4 mb-4 bg-gray-50 shadow-sm relative">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-medium text-gray-700">{doc.docType === 'special_branch' ? 'Special Branch' : 'Local Police'} #{index + 1}</h4>
-                    <button type="button" onClick={() => setSecurityDocuments(prev => prev.filter(d => d.id !== doc.id))} className="text-red-600 text-sm">Remove</button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="col-span-1">
-                         {/* Certificate Number Input with Search Logic */}
-                         <label className="block text-sm font-medium text-gray-700 mb-1">Certificate Number</label>
-                         <div className="relative">
-                            <input 
-                              type="text" 
-                              value={doc.certificateNumber} 
-                              onChange={(e) => handleSecurityNumberChange(doc.id, e.target.value)} 
-                              placeholder="Enter No. to search"
-                              className="block w-full input-style" 
-                            />
-                            {doc.isChecking && <span className="absolute right-2 top-2 text-xs text-blue-500">Checking...</span>}
-                         </div>
-                         {doc.foundMessage && <p className="text-xs text-green-600 mt-1">{doc.foundMessage}</p>}
-                         {!doc.useExisting && !doc.isChecking && doc.certificateNumber.length > 2 && <p className="text-xs text-gray-500 mt-1">No existing record. Please upload.</p>}
-
-                         <label className="block text-sm font-medium text-gray-700 mt-3 mb-1">Issue Date</label>
-                         <input type="date" value={doc.issueDate || ''} onChange={(e) => setSecurityDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, issueDate: e.target.value } : d))} className="block w-full input-style" />
-                    </div>
-
-                    <div className="col-span-1">
-                      {doc.useExisting ? (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Linked Document</label>
-                          <div className="relative h-32 w-full border rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
-                              {doc.preview ? <Image src={doc.preview} alt="Linked Doc" fill className="object-cover" /> : <span>No Preview</span>}
-                              <div className="absolute bottom-0 w-full bg-green-600 text-white text-xs text-center py-1">Linked from Database</div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-1">Upload New Document</label>
-                           <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleSecurityDocumentUpload(doc.id, e.target.files[0])} className="block w-full text-sm text-gray-500" />
-                           {doc.preview && <div className="mt-2 h-24 w-24 relative"><Image src={doc.preview} alt="New Upload" fill className="object-cover rounded border" /></div>}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+        <form onSubmit={handleSubmit} className="space-y-8">
+          
+          {/* Personal Details */}
+          <section className="bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-xl p-6">
+            <div className="flex items-center mb-6 pb-4 border-b border-blue-200">
+              <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">1</div>
+              <h2 className="text-xl font-semibold text-gray-900">Personal Details</h2>
             </div>
-          )}
-
-          {/* --- FINANCIAL SECTION (Updated) --- */}
-          <div>
-            <div className="flex items-center space-x-3 mb-4">
-              <input type="checkbox" id="isExempt" checked={isExempt} onChange={(e) => setIsExempt(e.target.checked)} className="h-4 w-4 text-blue-600 rounded" />
-              <label htmlFor="isExempt" className="text-sm font-medium text-gray-700">Mark as Exempt from Payment</label>
-            </div>
-
-            {isExempt ? (
-              <div><label className="block text-sm font-medium text-gray-700">Remarks *</label><textarea value={exemptionRemarks} onChange={(e) => setExemptionRemarks(e.target.value)} rows={3} className="mt-1 block w-full input-style" required={isExempt} /></div>
-            ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <div className="flex justify-between items-center mb-3">
-                  <label className="block text-sm font-medium text-gray-700">Financial Details</label>
-                  <button type="button" onClick={addFinancialDetail} className="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700">Add Payment Record</button>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Passport / CNIC <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <input type="text" name="idNumber" value={formData.idNumber} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="Enter ID number" />
+                  {autoFillStatus.isLoading && <div className="absolute right-3 top-3"><div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" /></div>}
+                </div>
+                {autoFillStatus.message && (
+                  <p className={`text-xs mt-2 flex items-center ${autoFillStatus.hasData ? 'text-green-600' : 'text-gray-500'}`}>
+                    {autoFillStatus.hasData && <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>}
+                    {autoFillStatus.message}
+                  </p>
+                )}
+              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Full Name <span className="text-red-500">*</span></label><input type="text" name="name" value={formData.name} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="Enter full name" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Father&apos;s Name</label><input type="text" name="fatherName" value={formData.fatherName} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="Enter father's name" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label><input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Place of Birth</label><input type="text" name="placeOfBirth" value={formData.placeOfBirth} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="Enter place of birth" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Nationality</label><input type="text" name="nationality" value={formData.nationality} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="Pakistani" /></div>
+            </div>
+          </section>
+
+          {/* Contact & Address */}
+          <section className="bg-gradient-to-br from-purple-50 to-white border border-purple-100 rounded-xl p-6">
+            <div className="flex items-center mb-6 pb-4 border-b border-purple-200">
+              <div className="bg-purple-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">2</div>
+              <h2 className="text-xl font-semibold text-gray-900">Contact & Address Information</h2>
+            </div>
+            <div className="space-y-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label><input type="text" name="mobileNumber" value={formData.mobileNumber} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" placeholder="+92 XXX XXXXXXX" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Present Address</label><textarea name="presentAddress" value={formData.presentAddress} onChange={handleInputChange} rows={3} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" placeholder="Enter current residential address" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Permanent Address</label><textarea name="permanentAddress" value={formData.permanentAddress} onChange={handleInputChange} rows={3} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all" placeholder="Enter permanent address" /></div>
+            </div>
+          </section>
+
+          {/* Employment & Pass Details */}
+          <section className="bg-gradient-to-br from-green-50 to-white border border-green-100 rounded-xl p-6">
+            <div className="flex items-center mb-6 pb-4 border-b border-green-200">
+              <div className="bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">3</div>
+              <h2 className="text-xl font-semibold text-gray-900">Employment & Pass Details</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Designation <span className="text-red-500">*</span></label><input type="text" name="designation" value={formData.designation} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" placeholder="e.g., Manager, Officer" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Organization <span className="text-red-500">*</span></label><input type="text" name="organization" value={formData.organization} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" placeholder="Enter organization name" /></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Pass Category</label>
+                <select name="category" value={formData.category} onChange={handleInputChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all">
+                  <option value="cargo">Cargo</option>
+                  <option value="landside">Landside</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Pass Year</label>
+                <select value={selectedYear} onChange={handleYearChange} disabled={isEditMode} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all disabled:bg-gray-100">
+                  <option value="">Select Year (Manual Dates)</option>
+                  {Array.from({length: 5}, (_, i) => currentYear + i).map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Date of Entry <span className="text-red-500">*</span></label><input type="date" name="dateOfEntry" value={formData.dateOfEntry} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-2">Date of Expiry <span className="text-red-500">*</span></label><input type="date" name="dateOfExpiry" value={formData.dateOfExpiry} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" /></div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Areas Allowed <span className="text-red-500">*</span></label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {availableAreas.map(area => (
+                  <label key={area} className="flex items-center space-x-2 p-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 cursor-pointer transition-all">
+                    <input type="checkbox" checked={formData.areaAllowed.includes(area)} onChange={handleAreaChange} value={area} className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
+                    <span className="text-sm text-gray-700">{area}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Security & Documents Section */}
+          <section className="bg-gradient-to-br from-orange-50 to-white border border-orange-100 rounded-xl p-6">
+            <div className="flex items-center mb-6 pb-4 border-b border-orange-200">
+              <div className="bg-orange-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">4</div>
+              <h2 className="text-xl font-semibold text-gray-900">Security & Documents</h2>
+            </div>
+
+            {/* Info Box */}
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-r-lg">
+              <div className="flex gap-3">
+                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-900 mb-1">Smart Document Linking</h3>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Enter certificate/receipt numbers to search existing records</li>
+                    <li>• Found documents will auto-link (no duplicate uploads needed)</li>
+                    <li>• New documents will be saved for future reuse</li>
+                    <li>• Bulk payments can be shared across multiple employees</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Clearance Selection */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">Security Clearance Type</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[{v:'special_branch',l:'Special Branch Police',icon:'🛡️'}, {v:'local_police',l:'Local Police',icon:'👮'}, {v:'na',l:'Not Applicable',icon:'❌'}].map(o=>(
+                  <label key={o.v} className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${formData.securityClearance===o.v ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
+                    <input type="radio" name="securityClearance" value={o.v} checked={formData.securityClearance===o.v} onChange={handleInputChange} className="h-4 w-4 text-orange-600 focus:ring-orange-500" />
+                    <span className="ml-3 text-2xl">{o.icon}</span>
+                    <span className="ml-2 text-sm font-medium text-gray-900">{o.l}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Security Documents */}
+            {formData.securityClearance !== 'na' && (
+              <div className="mb-8">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Security Documents</h3>
+                    <p className="text-sm text-gray-500 mt-1">Upload certificates or link to existing ones</p>
+                  </div>
+                  <button type="button" onClick={addSecurityDocument} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Document
+                  </button>
                 </div>
 
-                {financialDetails.map((detail, index) => (
-                  <div key={detail.id} className="border rounded-md p-4 mb-4 bg-gray-50 shadow-sm relative">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="font-medium text-gray-700">Payment Record {index + 1}</h4>
-                      <button type="button" onClick={() => setFinancialDetails(prev => prev.filter(d => d.id !== detail.id))} className="text-red-600 text-sm">Remove</button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                      {/* Receipt Number with Search Logic */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Receipt Number</label>
-                        <div className="relative">
-                            <input 
-                              type="text" 
-                              value={detail.receiptNumber} 
-                              onChange={(e) => handleReceiptNumberChange(detail.id, e.target.value)} 
-                              className="mt-1 block w-full input-style"
-                              placeholder="Enter to search"
-                            />
-                            {detail.isChecking && <span className="absolute right-2 top-3 text-xs text-blue-500">...</span>}
+                {securityDocuments.map((doc, index) => (
+                  <div key={doc.id} className="border-2 border-gray-200 rounded-lg p-5 mb-4 bg-gradient-to-br from-gray-50 to-white hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                          {doc.docType === 'special_branch' ? '🛡️ Special Branch' : '👮 Local Police'} #{index + 1}
                         </div>
-                        {detail.foundMessage && <p className="text-xs text-green-600 mt-1">{detail.foundMessage}</p>}
+                        {doc.useExisting && (
+                          <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                            Linked
+                          </div>
+                        )}
                       </div>
-                      
-                      <div><label className="block text-sm font-medium text-gray-700">Amount</label><input type="number" value={detail.totalAmount} onChange={(e) => handleFinancialDetailChange(detail.id, 'totalAmount', e.target.value)} className="mt-1 block w-full input-style" /></div>
-                      <div><label className="block text-sm font-medium text-gray-700">Date</label><input type="date" value={detail.dateOfPayment} onChange={(e) => handleFinancialDetailChange(detail.id, 'dateOfPayment', e.target.value)} className="mt-1 block w-full input-style" /></div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Bank</label>
-                        <select value={detail.bank} onChange={(e) => handleFinancialDetailChange(detail.id, 'bank', e.target.value)} className="mt-1 block w-full input-style"><option value="HBL">HBL</option><option value="NBP">NBP</option><option value="OTHER">Other</option></select>
-                      </div>
-                      <div className="col-span-full"><label className="flex items-center"><input type="checkbox" checked={detail.isMultipleEmployees} onChange={(e) => handleFinancialDetailChange(detail.id, 'isMultipleEmployees', e.target.checked)} className="h-4 w-4 text-blue-600 rounded" /><span className="ml-2 text-sm text-gray-700">Bulk Payment (Multiple Employees)</span></label></div>
-                      {detail.isMultipleEmployees && (
-                        <>
-                          <div><label className="block text-sm font-medium text-gray-700">Total Employees</label><input type="number" min="1" value={detail.employeeCount || 1} onChange={(e) => handleFinancialDetailChange(detail.id, 'employeeCount', parseInt(e.target.value))} className="mt-1 block w-full input-style" /></div>
-                          <div><label className="block text-sm font-medium text-gray-700">Amount Per Person</label><input type="number" value={detail.amountPerEmployee || ''} onChange={(e) => handleFinancialDetailChange(detail.id, 'amountPerEmployee', e.target.value)} className="mt-1 block w-full input-style" /></div>
-                        </>
-                      )}
+                      <button type="button" onClick={() => setSecurityDocuments(prev => prev.filter(d => d.id !== doc.id))} className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors">
+                        ✕ Remove
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {detail.useExisting ? (
-                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Linked Receipt</label>
-                            <div className="relative h-40 w-40 border rounded-md overflow-hidden">
-                                {detail.receiptPreview ? <Image src={detail.receiptPreview} alt="Receipt" fill className="object-cover" /> : <span>No Preview</span>}
-                                <div className="absolute bottom-0 w-full bg-green-600 text-white text-xs text-center py-1">Linked Receipt</div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Certificate Number *</label>
+                          <div className="relative">
+                            <input type="text" value={doc.certificateNumber} onChange={(e) => handleSecurityNumberChange(doc.id, e.target.value)} placeholder="Enter certificate number to search..." className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-10" />
+                            {doc.isChecking && (
+                              <div className="absolute right-3 top-3">
+                                <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" />
+                              </div>
+                            )}
+                            {!doc.isChecking && doc.certificateNumber.length > 2 && (
+                              <svg className="absolute right-3 top-3 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            )}
+                          </div>
+
+                          {doc.foundMessage && (
+                            <div className="mt-2 flex items-start gap-2 bg-green-50 border border-green-200 rounded-lg p-3">
+                              <svg className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                              <div>
+                                <p className="text-sm text-green-800 font-medium">{doc.foundMessage}</p>
+                                <p className="text-xs text-green-600 mt-1">Using existing document from database</p>
+                              </div>
                             </div>
-                         </div>
-                       ) : (
-                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Upload New Receipt</label>
-                            <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleFinancialDetailChange(detail.id, 'receiptImage', e.target.files[0])} className="mt-1 block w-full text-sm text-gray-500" />
-                            {detail.receiptPreview && <div className="mt-2 h-24 w-24 relative"><Image src={detail.receiptPreview} alt="Preview" fill className="object-cover rounded border" /></div>}
-                         </div>
-                       )}
+                          )}
+
+                          {!doc.isChecking && !doc.useExisting && doc.certificateNumber.length > 2 && (
+                            <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <svg className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              <div>
+                                <p className="text-sm text-amber-800 font-medium">No existing record found</p>
+                                <p className="text-xs text-amber-600 mt-1">Please upload a new document below</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Issue Date</label>
+                          <input type="date" value={doc.issueDate || ''} onChange={(e) => setSecurityDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, issueDate: e.target.value } : d))} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {doc.useExisting ? 'Linked Document Preview' : 'Upload New Document'}
+                        </label>
+
+                        {doc.useExisting && doc.preview ? (
+                          <div className="relative rounded-lg overflow-hidden border-2 border-green-300 shadow-md">
+                            <Image src={doc.preview} alt="Linked certificate" width={300} height={200} className="w-full h-48 object-cover" />
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-green-600 to-transparent p-3">
+                              <div className="flex items-center gap-2 text-white text-sm font-medium">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                                Linked from Database
+                              </div>
+                            </div>
+                          </div>
+                        ) : doc.preview ? (
+                          <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 shadow-md">
+                            <Image src={doc.preview} alt="Document preview" width={300} height={200} className="w-full h-48 object-cover" />
+                            <div className="absolute top-2 right-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">New Upload</div>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors cursor-pointer bg-gray-50">
+                            <input type="file" accept="image/*,.pdf" onChange={(e) => e.target.files?.[0] && handleSecurityDocumentUpload(doc.id, e.target.files[0])} className="hidden" id={`security-upload-${doc.id}`} />
+                            <label htmlFor={`security-upload-${doc.id}`} className="cursor-pointer">
+                              <svg className="mx-auto text-gray-400 mb-2" width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              <p className="text-sm text-gray-600 font-medium">Click to upload</p>
+                              <p className="text-xs text-gray-500 mt-1">PNG, JPG or PDF (Max 10MB)</p>
+                            </label>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
 
-          {/* Photo Upload */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Employee Photo</label>
-            <div onClick={() => fileInputRef.current?.click()} onDrop={(e)=>{e.preventDefault(); setIsDraggingOver(false); if(e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0])}} onDragOver={(e)=>{e.preventDefault(); setIsDraggingOver(true)}} onDragLeave={()=>{setIsDraggingOver(false)}} className={`mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer ${isDraggingOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
-              <input ref={fileInputRef} type="file" name="photo" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-              {photoPreview ? <Image src={photoPreview} alt="Preview" width={150} height={150} className="rounded-md border object-cover" /> : <div className="text-center text-gray-500"><p>Click or Drag Photo</p></div>}
+            {/* Financial Details */}
+            <div>
+              <div className="flex items-center space-x-3 mb-6">
+                <input type="checkbox" id="isExempt" checked={isExempt} onChange={(e) => setIsExempt(e.target.checked)} className="h-5 w-5 text-orange-600 rounded focus:ring-orange-500" />
+                <label htmlFor="isExempt" className="text-sm font-medium text-gray-900 cursor-pointer">
+                  Mark as Exempt from Payment
+                </label>
+              </div>
+
+              {isExempt ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Exemption Remarks *</label>
+                  <textarea value={exemptionRemarks} onChange={(e) => setExemptionRemarks(e.target.value)} rows={3} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all" required={isExempt} placeholder="Explain reason for exemption..." />
+                </div>
+              ) : (
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">Payment Records</h3>
+                      <p className="text-sm text-gray-500 mt-1">Add payment details or link to existing receipts</p>
+                    </div>
+                    <button type="button" onClick={addFinancialDetail} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Payment
+                    </button>
+                  </div>
+
+                  {financialDetails.map((detail, index) => (
+                    <div key={detail.id} className="border-2 border-gray-200 rounded-lg p-5 mb-4 bg-gradient-to-br from-gray-50 to-white hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium">💰 Payment #{index + 1}</div>
+                          {detail.useExisting && (
+                            <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                              </svg>
+                              Linked
+                            </div>
+                          )}
+                          {detail.isMultipleEmployees && (
+                            <div className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-medium">👥 Bulk</div>
+                          )}
+                        </div>
+                        <button type="button" onClick={() => setFinancialDetails(prev => prev.filter(d => d.id !== detail.id))} className="text-red-600 hover:text-red-800 text-sm font-medium transition-colors">
+                          ✕ Remove
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Receipt Number *</label>
+                          <div className="relative">
+                            <input type="text" value={detail.receiptNumber} onChange={(e) => handleReceiptNumberChange(detail.id, e.target.value)} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all pr-10" placeholder="Enter receipt number to search..." />
+                            {detail.isChecking && (
+                              <div className="absolute right-3 top-3">
+                                <div className="animate-spin h-4 w-4 border-2 border-green-500 border-t-transparent rounded-full" />
+                              </div>
+                            )}
+                          </div>
+
+                          {detail.foundMessage && (
+                            <div className="mt-2 flex items-start gap-2 bg-green-50 border border-green-200 rounded-lg p-3">
+                              <svg className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                              <div>
+                                <p className="text-sm text-green-800 font-medium">{detail.foundMessage}</p>
+                                <p className="text-xs text-green-600 mt-1">Details auto-filled from database</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {!detail.isChecking && !detail.useExisting && detail.receiptNumber.length > 1 && (
+                            <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <svg className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              <p className="text-sm text-amber-800">New receipt - please fill details and upload image</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Total Amount *</label>
+                          <input type="number" value={detail.totalAmount} onChange={(e) => handleFinancialDetailChange(detail.id, 'totalAmount', e.target.value)} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" placeholder="0.00" readOnly={detail.useExisting} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Payment Date *</label>
+                          <input type="date" value={detail.dateOfPayment} onChange={(e) => handleFinancialDetailChange(detail.id, 'dateOfPayment', e.target.value)} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" readOnly={detail.useExisting} />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Bank *</label>
+                          <select value={detail.bank} onChange={(e) => handleFinancialDetailChange(detail.id, 'bank', e.target.value)} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" disabled={detail.useExisting}>
+                            <option value="HBL">HBL</option>
+                            <option value="NBP">NBP</option>
+                            <option value="OTHER">Other</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+                          <select value={detail.paymentMethod} onChange={(e) => handleFinancialDetailChange(detail.id, 'paymentMethod', e.target.value)} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all">
+                            <option value="CASH">CASH</option>
+                            <option value="CHEQUE">CHEQUE</option>
+                            <option value="ONLINE_TRANSFER">ONLINE_TRANSFER</option>
+                            <option value="BANK_DRAFT">BANK_DRAFT</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Bulk Payment Toggle */}
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input type="checkbox" checked={detail.isMultipleEmployees} onChange={(e) => handleFinancialDetailChange(detail.id, 'isMultipleEmployees', e.target.checked)} className="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
+                          <div>
+                            <span className="text-sm font-medium text-gray-900">Bulk Payment (Multiple Employees)</span>
+                            <p className="text-xs text-gray-600 mt-0.5">This receipt covers payment for multiple employees</p>
+                          </div>
+                        </label>
+
+                        {detail.isMultipleEmployees && (
+                          <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Number of Employees</label>
+                              <input type="number" min="2" value={detail.employeeCount || 2} onChange={(e) => handleFinancialDetailChange(detail.id, 'employeeCount', parseInt(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Amount Per Employee</label>
+                              <input type="number" value={detail.amountPerEmployee || ''} onChange={(e) => handleFinancialDetailChange(detail.id, 'amountPerEmployee', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500" placeholder="Auto-calculated" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Receipt Image */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Receipt Image {!detail.useExisting && '*'}
+                        </label>
+
+                        {detail.useExisting && detail.receiptPreview ? (
+                          <div className="relative rounded-lg overflow-hidden border-2 border-green-300 shadow-md max-w-xs">
+                            <Image src={detail.receiptPreview} alt="Linked receipt" width={300} height={200} className="w-full h-48 object-cover" />
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-green-600 to-transparent p-3">
+                              <div className="flex items-center gap-2 text-white text-sm font-medium">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                                Linked Receipt
+                              </div>
+                            </div>
+                          </div>
+                        ) : detail.receiptPreview ? (
+                          <div className="relative rounded-lg overflow-hidden border-2 border-gray-300 shadow-md max-w-xs">
+                            <Image src={detail.receiptPreview} alt="Receipt preview" width={300} height={200} className="w-full h-48 object-cover" />
+                            <div className="absolute top-2 right-2 bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">New Upload</div>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors cursor-pointer bg-gray-50 max-w-xs">
+                            <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleFinancialDetailChange(detail.id, 'receiptImage', e.target.files[0])} className="hidden" id={`receipt-upload-${detail.id}`} />
+                            <label htmlFor={`receipt-upload-${detail.id}`} className="cursor-pointer">
+                              <svg className="mx-auto text-gray-400 mb-2" width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                              </svg>
+                              <p className="text-sm text-gray-600 font-medium">Upload receipt image</p>
+                              <p className="text-xs text-gray-500 mt-1">PNG or JPG (Max 10MB)</p>
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        </section>
+          </section>
 
-        <button type="submit" disabled={isLoading} className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400">
-          {isLoading ? 'Submitting...' : (isEditMode ? 'Update Pass' : 'Create New Pass')}
-        </button>
-      </form>
-      <style jsx global>{`.input-style { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); border: 1px solid #D1D5DB; border-radius: 0.375rem; width: 100%; padding: 0.5rem 0.75rem; }`}</style>
+          {/* Employee Photo */}
+          <section className="bg-gradient-to-br from-pink-50 to-white border border-pink-100 rounded-xl p-6">
+            <div className="flex items-center mb-6 pb-4 border-b border-pink-200">
+              <div className="bg-pink-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">5</div>
+              <h2 className="text-xl font-semibold text-gray-900">Employee Photo</h2>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">Upload Employee Photo</label>
+              <div 
+                onClick={() => fileInputRef.current?.click()} 
+                onDrop={(e)=>{e.preventDefault(); setIsDraggingOver(false); if(e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0])}} 
+                onDragOver={(e)=>{e.preventDefault(); setIsDraggingOver(true)}} 
+                onDragLeave={()=>{setIsDraggingOver(false)}} 
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${isDraggingOver ? 'border-pink-500 bg-pink-50' : 'border-gray-300 hover:border-pink-400 bg-gray-50'}`}
+              >
+                <input ref={fileInputRef} type="file" name="photo" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                {photoPreview ? (
+                  <div className="flex flex-col items-center">
+                    <Image src={photoPreview} alt="Preview" width={150} height={150} className="rounded-lg border-4 border-white shadow-lg object-cover mb-3" />
+                    <p className="text-sm text-gray-600">Click to change photo</p>
+                    {existingPhotoRef && !photo && (
+                        <p className="text-xs text-green-600 mt-1 font-medium">Using photo from database</p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <svg className="mx-auto text-gray-400 mb-3" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-base text-gray-700 font-medium mb-1">Click or Drag Photo Here</p>
+                    <p className="text-sm text-gray-500">PNG, JPG or JPEG (Max 10MB)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Submit Button */}
+          <div className="flex justify-end gap-4">
+            <button 
+              type="button" 
+              onClick={() => router.back()}
+              className="px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              disabled={isLoading} 
+              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {isEditMode ? 'Update Pass' : 'Create Pass'}
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

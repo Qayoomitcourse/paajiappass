@@ -54,13 +54,13 @@ export default defineType({
       fieldset: 'personalDetails',
     }),
     defineField({
-  name: 'cnic',
-  title: 'CNIC (Legacy - for old records)',
-  type: 'string',
-  fieldset: 'personalDetails',
-  readOnly: true, // Make it read-only so it doesn't interfere with new entries
-  hidden: true,   // Hide it from the form since you're using idNumber now
-}),
+      name: 'cnic',
+      title: 'CNIC (Legacy - for old records)',
+      type: 'string',
+      fieldset: 'personalDetails',
+      readOnly: true,
+      hidden: true,
+    }),
     defineField({
       name: 'dateOfBirth',
       title: 'Date of Birth',
@@ -168,7 +168,7 @@ export default defineType({
       fieldset: 'securityDetails',
     }),
     
-    // FIXED: Security Documents Field
+    // === UPDATED: Security Documents Field ===
     defineField({
       name: 'securityDocuments',
       title: 'Security Clearance Documents',
@@ -187,20 +187,34 @@ export default defineType({
               ]
             }
           },
+          // !!! ADD THIS FIELD !!!
+          {
+            name: 'certificateNumber',
+            type: 'string',
+            title: 'Certificate Number'
+          },
           {
             name: 'issueDate',
             type: 'date',
             title: 'Issue Date'
           },
+          // Use 'image' type instead of 'file' for easier previews
           {
-            name: 'document',
-            type: 'file',
-            title: 'Document File',
+            name: 'asset', // I changed this from 'document' to 'asset' to match frontend logic easier
+            type: 'image',
+            title: 'Document Image',
             options: {
-              accept: 'image/*,.pdf'
+              hotspot: true
             }
           }
-        ]
+        ],
+        preview: {
+          select: {
+            title: 'docType',
+            subtitle: 'certificateNumber',
+            media: 'asset'
+          }
+        }
       }],
       fieldset: 'securityDetails',
       hidden: ({ document }) => document?.securityClearance === 'na'
@@ -221,101 +235,101 @@ export default defineType({
       fieldset: 'feeDetails',
       hidden: ({ document }) => !document?.isExempt,
     }),
-    // FIXED: Financial Details Field Structure
-   defineField({
-  name: 'financialDetails',
-  title: 'Payment Records',
-  type: 'array',
-  of: [{
-    type: 'object',
-    title: 'Payment Record',
-    fields: [
-      {
-        name: 'receiptNumber',
-        type: 'string',
-        title: 'Receipt Number',
-        validation: Rule => Rule.required()
-      },
-      {
-        name: 'totalAmount',
-        type: 'string',
-        title: 'Total Amount',
-        validation: Rule => Rule.required()
-      },
-      {
-        name: 'dateOfPayment',
-        type: 'date',
-        title: 'Date of Payment',
-        validation: Rule => Rule.required()
-      },
-      {
-        name: 'bank',
-        type: 'string',
-        title: 'Bank',
-        options: {
-          list: ['HBL', 'NBP', 'OTHER']
-        },
-        validation: Rule => Rule.required()
-      },
-      {
-        name: 'otherBankName',
-        type: 'string',
-        title: 'Other Bank Name',
-        hidden: ({ parent }) => parent?.bank !== 'OTHER'
-      },
-      {
-        name: 'paymentMethod',
-        type: 'string',
-        title: 'Payment Method',
-        options: {
-          list: ['CASH', 'CHEQUE', 'ONLINE_TRANSFER', 'BANK_DRAFT']
-        },
-        initialValue: 'CASH',
-        validation: Rule => Rule.required()
-      },
-      {
-        name: 'chequeNumber',
-        type: 'string',
-        title: 'Cheque/Draft Number',
-        hidden: ({ parent }) =>
-          !['CHEQUE', 'BANK_DRAFT'].includes(parent?.paymentMethod || '')
-      },
-      {
-        name: 'isMultipleEmployees',
-        type: 'boolean',
-        title: 'Payment for Multiple Employees',
-        initialValue: false
-      },
-      {
-        name: 'employeeCount',
-        type: 'number',
-        title: 'Number of Employees',
-        hidden: ({ parent }) => !parent?.isMultipleEmployees,
-        validation: Rule => Rule.min(1)
-      },
-      {
-        name: 'amountPerEmployee',
-        type: 'string',
-        title: 'Amount Per Employee',
-        hidden: ({ parent }) => !parent?.isMultipleEmployees
-      },
-      {
-        name: 'remarks',
-        type: 'text',
-        title: 'Remarks'
-      },
-      {
-        name: 'receiptImage',
-        type: 'image',
-        title: 'Receipt Image',
-        validation: Rule => Rule.required()
-      }
-    ]
-  }],
-  fieldset: 'feeDetails',
-  hidden: ({ document }) => Boolean(document?.isExempt),  // ✅ FIXED
-}),
-
+    
+    // --- FINANCIAL DETAILS ---
+    defineField({
+      name: 'financialDetails',
+      title: 'Payment Records',
+      type: 'array',
+      of: [{
+        type: 'object',
+        title: 'Payment Record',
+        fields: [
+          {
+            name: 'receiptNumber',
+            type: 'string',
+            title: 'Receipt Number',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'totalAmount',
+            type: 'string',
+            title: 'Total Amount',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'dateOfPayment',
+            type: 'date',
+            title: 'Date of Payment',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'bank',
+            type: 'string',
+            title: 'Bank',
+            options: {
+              list: ['HBL', 'NBP', 'OTHER']
+            },
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'otherBankName',
+            type: 'string',
+            title: 'Other Bank Name',
+            hidden: ({ parent }) => parent?.bank !== 'OTHER'
+          },
+          {
+            name: 'paymentMethod',
+            type: 'string',
+            title: 'Payment Method',
+            options: {
+              list: ['CASH', 'CHEQUE', 'ONLINE_TRANSFER', 'BANK_DRAFT']
+            },
+            initialValue: 'CASH',
+            validation: Rule => Rule.required()
+          },
+          {
+            name: 'chequeNumber',
+            type: 'string',
+            title: 'Cheque/Draft Number',
+            hidden: ({ parent }) =>
+              !['CHEQUE', 'BANK_DRAFT'].includes(parent?.paymentMethod || '')
+          },
+          {
+            name: 'isMultipleEmployees',
+            type: 'boolean',
+            title: 'Payment for Multiple Employees',
+            initialValue: false
+          },
+          {
+            name: 'employeeCount',
+            type: 'number',
+            title: 'Number of Employees',
+            hidden: ({ parent }) => !parent?.isMultipleEmployees,
+            validation: Rule => Rule.min(1)
+          },
+          {
+            name: 'amountPerEmployee',
+            type: 'string',
+            title: 'Amount Per Employee',
+            hidden: ({ parent }) => !parent?.isMultipleEmployees
+          },
+          {
+            name: 'remarks',
+            type: 'text',
+            title: 'Remarks'
+          },
+          {
+            name: 'receiptImage',
+            type: 'image',
+            title: 'Receipt Image',
+            validation: Rule => Rule.required()
+          }
+        ]
+      }],
+      fieldset: 'feeDetails',
+      hidden: ({ document }) => Boolean(document?.isExempt),
+    }),
 
     // --- SYSTEM FIELDS ---
     defineField({

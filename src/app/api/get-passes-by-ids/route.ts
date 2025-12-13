@@ -25,10 +25,9 @@ export async function POST(request: NextRequest) {
 
     // 1. Prepare IDs (Handle both Number 1 and String "0001")
     const numericIds = passIds.map(id => parseInt(id, 10)).filter(n => !isNaN(n));
-    const stringIds = passIds; // Keep original strings too, just in case
+    const stringIds = passIds;
 
-    // 2. BROAD QUERY: Fetch ALL passes with these IDs (Ignore Year/Category for now)
-    // We will filter in JavaScript. This ensures we don't miss data due to syntax errors.
+    // 2. BROAD QUERY: Fetch ALL passes with these IDs
     const query = `*[_type == "employeePass" && (passId in $numericIds || passId in $stringIds)] {
       _id,
       passId,
@@ -48,20 +47,39 @@ export async function POST(request: NextRequest) {
 
     console.log(`> Raw Database Results: Found ${rawEmployees.length} total records for these IDs.`);
 
-    // 3. JAVASCRIPT FILTERING (Strict & Debuggable)
+    // 3. JAVASCRIPT FILTERING (Fixed Year Logic)
     const validEmployees = rawEmployees.filter(emp => {
       // A. Normalize Data
-      const empId = String(emp.passId); // Convert DB ID to string "1"
-      const empCategory = (emp.category || '').toLowerCase().trim(); // "cargo"
-      const targetCategory = category.toLowerCase().trim(); // "cargo"
-      const empExpiry = emp.dateOfExpiry || ''; // "2026-12-31"
+      const empId = String(emp.passId);
+      const empCategory = (emp.category || '').toLowerCase().trim();
+      const targetCategory = category.toLowerCase().trim();
+      const empEntry = emp.dateOfEntry || '';
+      const empExpiry = emp.dateOfExpiry || '';
 
-      // B. Debug Logs for each record
-      const isIdMatch = passIds.some(reqId => parseInt(reqId) === parseInt(empId));
+      // B. Year Matching Logic (FIXED)
+      // Check if the requested year falls within the pass validity period
+      const entryYear = empEntry ? new Date(empEntry).getFullYear() : null;
+      const expiryYear = empExpiry ? new Date(empExpiry).getFullYear() : null;
+      const requestedYear = parseInt(year, 10);
+
+      // Pass is valid for the year if:
+      // - Entry year matches the requested year, OR
+      // - Expiry year matches the requested year, OR
+      // - The requested year falls between entry and expiry years
+      let isYearMatch = false;
+      if (entryYear && expiryYear) {
+        isYearMatch = requestedYear >= entryYear && requestedYear <= expiryYear;
+      } else if (entryYear) {
+        isYearMatch = requestedYear === entryYear;
+      } else if (expiryYear) {
+        isYearMatch = requestedYear === expiryYear;
+      }
+
+      // C. Debug Logs
+      const isIdMatch = passIds.some(reqId => parseInt(reqId, 10) === parseInt(empId));
       const isCatMatch = empCategory === targetCategory;
-      const isYearMatch = empExpiry.startsWith(year);
 
-      if (!isIdMatch) return false; // Should not happen given the query
+      if (!isIdMatch) return false;
 
       if (!isCatMatch) {
         console.log(`  X Skipping Pass [${empId}]: Category mismatch (DB: '${empCategory}' vs Req: '${targetCategory}')`);
@@ -69,11 +87,11 @@ export async function POST(request: NextRequest) {
       }
 
       if (!isYearMatch) {
-        console.log(`  X Skipping Pass [${empId}]: Year mismatch (DB Expiry: '${empExpiry}' vs Req Year: '${year}')`);
+        console.log(`  X Skipping Pass [${empId}]: Year mismatch (Entry: ${entryYear}, Expiry: ${expiryYear}, Requested: ${requestedYear})`);
         return false;
       }
 
-      console.log(`  ✓ MATCH: Pass [${empId}] for ${year}`);
+      console.log(`  ✓ MATCH: Pass [${empId}] for ${year} (Entry: ${entryYear}, Expiry: ${expiryYear})`);
       return true;
     });
 
@@ -85,16 +103,18 @@ export async function POST(request: NextRequest) {
 
     // 5. Calculate Missing IDs
     const foundDbIds = new Set(mappedEmployees.map(e => String(e.passId)));
-    
-    // Check original inputs against found results
     const notFoundIds = passIds.filter(rawInputId => {
-        const normalizedInput = String(parseInt(rawInputId, 10));
-        return !foundDbIds.has(normalizedInput);
+      const normalizedInput = String(parseInt(rawInputId, 10));
+      return !foundDbIds.has(normalizedInput);
     });
 
     if (notFoundIds.length > 0) {
       console.log(`> WARNING: Could not find IDs: ${notFoundIds.join(', ')}`);
     }
+
+    console.log(`\n--- FINAL RESULTS ---`);
+    console.log(`Total Found: ${mappedEmployees.length}`);
+    console.log(`Not Found: ${notFoundIds.join(', ') || 'None'}`);
 
     return NextResponse.json({
       employees: mappedEmployees,
