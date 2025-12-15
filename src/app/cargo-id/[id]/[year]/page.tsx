@@ -136,8 +136,7 @@ function EmployeeDetailsPage() {
   const pageCategory = pathname.includes('/cargo-id/') ? 'cargo' : 'landside';
 
   console.log('URL Parameters:', { passId, year, pageCategory, pathname });
-
-  const fetchEmployeeDetails = useCallback(async () => {
+const fetchEmployeeDetails = useCallback(async () => {
     if (!passId || !year || !pageCategory) {
       console.log('Missing required parameters:', { passId, year, pageCategory });
       setError('Missing required parameters to load employee details');
@@ -151,7 +150,6 @@ function EmployeeDetailsPage() {
     try {
       console.log('Fetching employee details with:', { passId, year, pageCategory });
       
-      // First, let's try to get the employee by passId and year to find the document ID
       const response = await fetch(`/api/passes?passId=${passId}&year=${year}&category=${pageCategory}`, { 
         cache: 'no-store' 
       });
@@ -161,14 +159,22 @@ function EmployeeDetailsPage() {
       }
       
       const passes = await response.json();
+      
+      // --- CHANGE START ---
+      // Robust comparison for passId
       const matchingPass = passes.find((pass: EmployeePass) => 
-        pass.passId === parseInt(passId) && 
+        String(pass.passId) === String(passId) && 
         new Date(pass.dateOfEntry).getFullYear().toString() === year &&
         pass.category === pageCategory
       );
+      // --- CHANGE END ---
       
       if (!matchingPass) {
-        throw new Error(`No pass found with ID ${passId} for year ${year} in ${pageCategory} category`);
+        // --- ADDED GRACEFUL HANDLING ---
+        // Instead of throwing, set a specific error message and return
+        setError(`No pass found with ID ${passId} for year ${year} in ${pageCategory} category`);
+        setLoading(false);
+        return;
       }
       
       // Now get the detailed employee data using the document ID

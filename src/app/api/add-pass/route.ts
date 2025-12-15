@@ -1,4 +1,4 @@
-// /app/api/add-pass/route.ts - FIXED VERSION WITH TYPE CORRECTIONS
+// /app/api/add-pass/route.ts - COMPLETE VERSION WITH ALL FEATURES
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
@@ -11,6 +11,7 @@ import { EmployeePass } from '@/app/types';
 // Zod Schemas
 const securityDocSchema = z.object({
   docType: z.string().min(1, "Document Type is required."),
+  certificateNumber: z.string().min(1, "Certificate Number is required."),
   issueDate: z.string().optional(),
 });
 
@@ -57,21 +58,12 @@ const addPassSchema = z.object({
   exemptionRemarks: z.string().optional(),
   securityDocuments: z.array(securityDocSchema).optional(),
   financialDetails: z.array(financialDetailSchema).optional(),
-})
-// .refine(
-//   (data) => data.isExempt || (data.financialDetails && data.financialDetails.length > 0),
-//   { message: "Financial details are required unless exempt", path: ["financialDetails"] }
-// )
-// .refine(
-//   (data) => !data.isExempt || !!data.exemptionRemarks,
-//   { message: "Exemption remarks are required when exempt", path: ["exemptionRemarks"] }
-// );
+});
 
-// Proper Types
-type SecurityDocInput = z.infer<typeof securityDocSchema> & { _file?: File };
-type FinancialDetailInput = z.infer<typeof financialDetailSchema> & { _file?: File };
+// Types
+type SecurityDocInput = z.infer<typeof securityDocSchema> & { _file?: File; _existingRef?: string };
+type FinancialDetailInput = z.infer<typeof financialDetailSchema> & { _file?: File; _existingRef?: string };
 
-// Interface for form data parsing result
 interface ParsedFormData {
   [key: string]: unknown;
   areaAllowed?: string[];
@@ -80,14 +72,14 @@ interface ParsedFormData {
   isExempt?: boolean;
 }
 
-// Interface for security document with file handling - FIXED
 interface SecurityDocumentWithFile {
   docType?: string;
+  certificateNumber?: string;
   issueDate?: string;
   _file?: File;
+  _existingRef?: string;
 }
 
-// Interface for financial detail with file handling - FIXED
 interface FinancialDetailWithFile {
   receiptNumber?: string;
   totalAmount?: string;
@@ -96,14 +88,14 @@ interface FinancialDetailWithFile {
   otherBankName?: string;
   paymentMethod?: string;
   chequeNumber?: string;
-  isMultipleEmployees?: boolean; // Changed from undefined to optional boolean
+  isMultipleEmployees?: boolean;
   employeeCount?: number;
   amountPerEmployee?: string;
   remarks?: string;
   _file?: File;
+  _existingRef?: string;
 }
 
-// Interface for pass document structure
 interface PassDocument {
   _type: string;
   name: string;
@@ -131,8 +123,9 @@ interface PassDocument {
     _key: string;
     _type: string;
     docType: string;
+    certificateNumber: string;
     issueDate?: string;
-    document?: { _type: string; asset: { _type: string; _ref: string } };
+    asset?: { _type: string; asset: { _type: string; _ref: string } };
   }>;
   financialDetails?: Array<{
     _key: string;
@@ -174,7 +167,7 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // FIXED parseFormData function with proper type handling
+    // COMPLETE parseFormData function
     const parseFormData = (formData: FormData): ParsedFormData => {
       const data: ParsedFormData = {};
       const securityDocsMap = new Map<number, SecurityDocumentWithFile>();
@@ -189,8 +182,8 @@ export async function POST(req: NextRequest) {
           if (!data.areaAllowed) data.areaAllowed = [];
           data.areaAllowed.push(value as string);
         } 
-        // Security Documents Processing - FIXED
-        else if (key.startsWith('securityDocument_') && !key.includes('Type') && !key.includes('Date') && !key.includes('Id')) {
+        // Security Documents Processing
+        else if (key.startsWith('securityDocument_') && !key.includes('Type') && !key.includes('Date') && !key.includes('Number') && !key.includes('Id') && !key.includes('RefId')) {
           const match = key.match(/securityDocument_(\d+)$/);
           if (match && value instanceof File && value.size > 0) {
             const index = parseInt(match[1]);
@@ -200,6 +193,18 @@ export async function POST(req: NextRequest) {
             const existingDoc = securityDocsMap.get(index)!;
             existingDoc._file = value;
             console.log(`Security doc ${index} file:`, value.name, value.size);
+          }
+        }
+        else if (key.startsWith('securityDocumentRefId_')) {
+          const match = key.match(/securityDocumentRefId_(\d+)/);
+          if (match) {
+            const index = parseInt(match[1]);
+            if (!securityDocsMap.has(index)) {
+              securityDocsMap.set(index, {});
+            }
+            const existingDoc = securityDocsMap.get(index)!;
+            existingDoc._existingRef = value as string;
+            console.log(`♻️ Security doc ${index} EXISTING ref:`, value);
           }
         }
         else if (key.startsWith('securityDocumentType_')) {
@@ -214,6 +219,18 @@ export async function POST(req: NextRequest) {
             console.log(`Security doc ${index} type:`, value);
           }
         }
+        else if (key.startsWith('securityDocumentNumber_')) {
+          const match = key.match(/securityDocumentNumber_(\d+)/);
+          if (match) {
+            const index = parseInt(match[1]);
+            if (!securityDocsMap.has(index)) {
+              securityDocsMap.set(index, {});
+            }
+            const existingDoc = securityDocsMap.get(index)!;
+            existingDoc.certificateNumber = value as string;
+            console.log(`Security doc ${index} cert number:`, value);
+          }
+        }
         else if (key.startsWith('securityDocumentDate_')) {
           const match = key.match(/securityDocumentDate_(\d+)/);
           if (match) {
@@ -226,7 +243,19 @@ export async function POST(req: NextRequest) {
             console.log(`Security doc ${index} date:`, value);
           }
         }
-        // Financial Details Processing - FIXED TYPE HANDLING
+        // Financial Details Processing
+        else if (key.startsWith('financialDetailRefId_')) {
+          const match = key.match(/financialDetailRefId_(\d+)/);
+          if (match) {
+            const index = parseInt(match[1]);
+            if (!financialDetailsMap.has(index)) {
+              financialDetailsMap.set(index, {});
+            }
+            const existingDetail = financialDetailsMap.get(index)!;
+            existingDetail._existingRef = value as string;
+            console.log(`♻️ Financial detail ${index} EXISTING ref:`, value);
+          }
+        }
         else if (key.startsWith('financialDetail_')) {
           const match = key.match(/financialDetail_(\d+)_(.+)/);
           if (match) {
@@ -242,13 +271,11 @@ export async function POST(req: NextRequest) {
               existingDetail._file = value;
               console.log(`Financial detail ${index} receipt:`, value.name, value.size);
             } else if (field !== 'receiptImage') {
-              // FIXED: Proper type handling without type assertions
               if (field === 'isMultipleEmployees') {
                 existingDetail.isMultipleEmployees = value === 'true';
               } else if (field === 'employeeCount') {
                 existingDetail.employeeCount = parseInt(value as string);
               } else if (value !== 'undefined' && value !== '') {
-                // Use type assertion more safely
                 switch (field) {
                   case 'receiptNumber':
                     existingDetail.receiptNumber = value as string;
@@ -278,7 +305,6 @@ export async function POST(req: NextRequest) {
                     existingDetail.remarks = value as string;
                     break;
                   default:
-                    // For unknown fields, use general assignment
                     (existingDetail as Record<string, unknown>)[field] = value;
                 }
               }
@@ -286,7 +312,7 @@ export async function POST(req: NextRequest) {
           }
         }
         // Handle simple fields
-        else if (!key.startsWith('securityDocumentId_') && !key.startsWith('financialDetail_') && key !== 'photo') {
+        else if (!key.startsWith('securityDocumentId_') && !key.startsWith('financialDetail_') && key !== 'photo' && key !== 'existingPhotoRef') {
           if (key === 'isExempt') {
             data[key] = value === 'true';
           } else {
@@ -295,60 +321,63 @@ export async function POST(req: NextRequest) {
         }
       }
       
-      // Convert Maps to Arrays - FIXED TYPE COMPATIBILITY
+      // Convert Maps to Arrays
       data.securityDocuments = Array.from(securityDocsMap.values())
         .filter((doc): doc is SecurityDocumentWithFile => {
-          const hasContent = !!(doc && (doc._file || doc.docType));
+          const hasContent = !!(doc && (doc._file || doc._existingRef || doc.docType));
           if (hasContent) {
             console.log("Security doc being added:", { 
               hasFile: !!doc._file, 
+              hasExistingRef: !!doc._existingRef,
               docType: doc.docType,
               fileName: doc._file?.name 
             });
           }
-          // Only include docs that have the required docType field or a file
-          return hasContent && (!!doc.docType || !!doc._file);
+          return hasContent && (!!doc.docType || !!doc._file || !!doc._existingRef);
         })
         .map((doc): SecurityDocInput => ({
-          docType: doc.docType || 'Unknown', // Provide default if missing - ensures non-undefined
+          docType: doc.docType || 'special_branch',
+          certificateNumber: doc.certificateNumber || '',
           issueDate: doc.issueDate,
-          _file: doc._file
+          _file: doc._file,
+          _existingRef: doc._existingRef
         }));
       
       data.financialDetails = Array.from(financialDetailsMap.values())
         .filter((detail): detail is FinancialDetailWithFile => {
-          const hasContent = !!(detail && (detail._file || detail.receiptNumber));
+          const hasContent = !!(detail && (detail._file || detail._existingRef || detail.receiptNumber));
           if (hasContent) {
             console.log("Financial detail being added:", { 
-              hasFile: !!detail._file, 
+              hasFile: !!detail._file,
+              hasExistingRef: !!detail._existingRef,
               receiptNumber: detail.receiptNumber,
               fileName: detail._file?.name 
             });
           }
-          // Only include details that have required fields
-          return hasContent && (!!detail.receiptNumber || !!detail._file);
+          return hasContent && (!!detail.receiptNumber || !!detail._file || !!detail._existingRef);
         })
         .map((detail): FinancialDetailInput => ({
-          receiptNumber: detail.receiptNumber || 'Unknown', // Ensure non-undefined
-          totalAmount: detail.totalAmount || '0', // Ensure non-undefined
-          dateOfPayment: detail.dateOfPayment || new Date().toISOString().split('T')[0], // Ensure non-undefined
-          bank: (detail.bank as "HBL" | "NBP" | "OTHER") || 'OTHER', // Ensure valid enum
+          receiptNumber: detail.receiptNumber || '',
+          totalAmount: detail.totalAmount || '0',
+          dateOfPayment: detail.dateOfPayment || new Date().toISOString().split('T')[0],
+          bank: (detail.bank as "HBL" | "NBP" | "OTHER") || 'OTHER',
           otherBankName: detail.otherBankName,
-          paymentMethod: (detail.paymentMethod as "CASH" | "CHEQUE" | "ONLINE_TRANSFER" | "BANK_DRAFT") || 'CASH', // Ensure valid enum
+          paymentMethod: (detail.paymentMethod as "CASH" | "CHEQUE" | "ONLINE_TRANSFER" | "BANK_DRAFT") || 'CASH',
           chequeNumber: detail.chequeNumber,
-          isMultipleEmployees: detail.isMultipleEmployees || false, // Ensure boolean
+          isMultipleEmployees: detail.isMultipleEmployees || false,
           employeeCount: detail.employeeCount,
           amountPerEmployee: detail.amountPerEmployee,
           remarks: detail.remarks,
-          _file: detail._file
+          _file: detail._file,
+          _existingRef: detail._existingRef
         }));
 
       console.log("Final parsed security documents:", data.securityDocuments.length);
       console.log("Final parsed financial details:", data.financialDetails.length);
-      
-      // Additional debug logging
       console.log("Security docs with files:", data.securityDocuments.filter(d => d._file).length);
+      console.log("Security docs with existing refs:", data.securityDocuments.filter(d => d._existingRef).length);
       console.log("Financial details with files:", data.financialDetails.filter(d => d._file).length);
+      console.log("Financial details with existing refs:", data.financialDetails.filter(d => d._existingRef).length);
       
       return data;
     };
@@ -374,6 +403,7 @@ export async function POST(req: NextRequest) {
 
     const { data: validatedData } = validationResult;
 
+    // Restore original arrays with file/ref data
     if (originalSecurityDocs.length > 0) {
       validatedData.securityDocuments = originalSecurityDocs;
     }
@@ -386,7 +416,9 @@ export async function POST(req: NextRequest) {
     originalSecurityDocs.forEach((doc, i) => {
       console.log(`  Doc ${i}:`, {
         docType: doc.docType,
+        certificateNumber: doc.certificateNumber,
         hasFile: !!doc._file,
+        hasExistingRef: !!doc._existingRef,
         fileName: doc._file?.name,
         fileSize: doc._file?.size
       });
@@ -397,6 +429,7 @@ export async function POST(req: NextRequest) {
       console.log(`  Detail ${i}:`, {
         receiptNumber: detail.receiptNumber,
         hasFile: !!detail._file,
+        hasExistingRef: !!detail._existingRef,
         fileName: detail._file?.name,
         fileSize: detail._file?.size
       });
@@ -404,9 +437,11 @@ export async function POST(req: NextRequest) {
 
     console.log("Validation passed, processing files...");
     
-    // Photo upload
+    // Photo upload with existing ref support
     const photoFile = formData.get('photo') as File | null;
+    const existingPhotoRef = formData.get('existingPhotoRef') as string | null;
     let photoAsset = null;
+    
     if (photoFile && photoFile.size > 0) {
       console.log("Uploading photo:", photoFile.name, photoFile.size);
       if (photoFile.size > 10 * 1024 * 1024) {
@@ -426,6 +461,9 @@ export async function POST(req: NextRequest) {
         console.error("Photo upload failed:", error);
         return NextResponse.json({ error: "Failed to upload photo" }, { status: 500 });
       }
+    } else if (existingPhotoRef) {
+      console.log("♻️ Using existing photo ref:", existingPhotoRef);
+      photoAsset = { _id: existingPhotoRef };
     }
     
     // Security Documents Upload
@@ -434,8 +472,9 @@ export async function POST(req: NextRequest) {
       _key: string;
       _type: string;
       docType: string;
+      certificateNumber: string;
       issueDate?: string;
-      document?: { _type: string; asset: { _type: string; _ref: string } };
+      asset?: { _type: string; asset: { _type: string; _ref: string } };
     }> = [];
     
     if (originalSecurityDocs && originalSecurityDocs.length > 0) {
@@ -446,10 +485,24 @@ export async function POST(req: NextRequest) {
         console.log(`Processing security doc ${i}:`, doc);
         
         const file = doc._file;
-        const docWithoutFile = { ...doc };
-        delete docWithoutFile._file;
+        const existingRef = doc._existingRef;
 
-        if (file instanceof File && file.size > 0) {
+        if (existingRef) {
+          // Use existing document reference
+          console.log(`♻️ Security doc ${i}: Using existing ref ${existingRef}`);
+          uploadedSecurityDocuments.push({
+            _key: `security_${Date.now()}_${i}`,
+            _type: 'object',
+            docType: doc.docType,
+            certificateNumber: doc.certificateNumber,
+            issueDate: doc.issueDate,
+            asset: {
+              _type: 'image',
+              asset: { _type: 'reference', _ref: existingRef }
+            }
+          });
+        } else if (file instanceof File && file.size > 0) {
+          // Upload new file
           console.log(`Uploading security file ${i}:`, file.name, file.size, file.type);
           
           try {
@@ -461,7 +514,7 @@ export async function POST(req: NextRequest) {
               throw new Error(`Security document ${i + 1} must be an image or PDF file`);
             }
 
-            const asset = await writeClient.assets.upload('file', file, { 
+            const asset = await writeClient.assets.upload('image', file, { 
               filename: `security_${doc.docType || 'unknown'}_${Date.now()}_${file.name}`,
             });
             
@@ -470,9 +523,11 @@ export async function POST(req: NextRequest) {
             uploadedSecurityDocuments.push({
               _key: `security_${Date.now()}_${i}`,
               _type: 'object',
-              ...docWithoutFile,
-              document: {
-                _type: 'file', 
+              docType: doc.docType,
+              certificateNumber: doc.certificateNumber,
+              issueDate: doc.issueDate,
+              asset: {
+                _type: 'image',
                 asset: { _type: 'reference', _ref: asset._id }
               }
             });
@@ -480,13 +535,6 @@ export async function POST(req: NextRequest) {
             console.error(`Security document ${i} upload failed:`, uploadError);
             throw new Error(`Failed to upload security document ${i + 1}: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
           }
-        } else if (Object.keys(docWithoutFile).length > 1) {
-          console.log(`Security doc ${i} without file:`, docWithoutFile);
-          uploadedSecurityDocuments.push({
-            _key: `security_${Date.now()}_${i}`,
-            _type: 'object',
-            ...docWithoutFile
-          });
         }
       }
     }
@@ -518,10 +566,36 @@ export async function POST(req: NextRequest) {
         console.log(`Processing financial detail ${i}:`, detail);
         
         const file = detail._file;
-        const detailWithoutFile = { ...detail };
-        delete detailWithoutFile._file;
+        const existingRef = detail._existingRef;
+        
+        const baseDetail = {
+          _key: `financial_${Date.now()}_${i}`,
+          _type: 'object' as const,
+          receiptNumber: detail.receiptNumber,
+          totalAmount: detail.totalAmount,
+          dateOfPayment: detail.dateOfPayment,
+          bank: detail.bank,
+          otherBankName: detail.otherBankName,
+          paymentMethod: detail.paymentMethod,
+          chequeNumber: detail.chequeNumber,
+          isMultipleEmployees: detail.isMultipleEmployees,
+          employeeCount: detail.employeeCount,
+          amountPerEmployee: detail.amountPerEmployee,
+          remarks: detail.remarks,
+        };
 
-        if (file instanceof File && file.size > 0) {
+        if (existingRef) {
+          // Use existing receipt reference
+          console.log(`♻️ Financial detail ${i}: Using existing ref ${existingRef}`);
+          uploadedFinancialDetails.push({
+            ...baseDetail,
+            receiptImage: {
+              _type: 'image',
+              asset: { _type: 'reference', _ref: existingRef }
+            }
+          });
+        } else if (file instanceof File && file.size > 0) {
+          // Upload new receipt
           console.log(`Uploading receipt file ${i}:`, file.name, file.size, file.type);
           
           try {
@@ -540,11 +614,9 @@ export async function POST(req: NextRequest) {
             console.log(`Receipt ${i} uploaded:`, asset._id);
             
             uploadedFinancialDetails.push({
-              _key: `financial_${Date.now()}_${i}`,
-              _type: 'object',
-              ...detailWithoutFile,
+              ...baseDetail,
               receiptImage: {
-                _type: 'image', 
+                _type: 'image',
                 asset: { _type: 'reference', _ref: asset._id }
               }
             });
@@ -552,13 +624,6 @@ export async function POST(req: NextRequest) {
             console.error(`Receipt ${i} upload failed:`, uploadError);
             throw new Error(`Failed to upload receipt ${i + 1}: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
           }
-        } else if (Object.keys(detailWithoutFile).length > 1) {
-          console.log(`Financial detail ${i} without file:`, detailWithoutFile);
-          uploadedFinancialDetails.push({
-            _key: `financial_${Date.now()}_${i}`,
-            _type: 'object',
-            ...detailWithoutFile
-          });
         }
       }
     }
@@ -634,6 +699,7 @@ export async function POST(req: NextRequest) {
         _type: 'image', 
         asset: { _type: 'reference', _ref: photoAsset._id } 
       };
+      console.log("✅ Photo added to document");
     }
 
     // Add security documents if exist

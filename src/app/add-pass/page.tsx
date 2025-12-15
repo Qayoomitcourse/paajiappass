@@ -42,8 +42,10 @@ interface FetchedDocument {
   docType: 'special_branch' | 'local_police';
   certificateNumber: string;
   issueDate?: string;
-  asset?: { _ref: string }; 
-  file?: { asset: { _ref: string } };
+  asset?: { _ref: string; _id?: string; url?: string };
+  file?: { asset: { _ref: string; _id?: string; url?: string } };
+  image?: { asset: { _ref: string; _id?: string; url?: string } };
+  scannedImage?: { asset: { _ref: string; _id?: string; url?: string } };
 }
 
 // Updated interface to handle fetched financial structure
@@ -59,13 +61,15 @@ interface FetchedFinancialDetail {
   employeeCount?: number;
   amountPerEmployee?: string;
   remarks?: string;
-  // Sanity image field usually looks like this
-  receiptImage?: { asset?: { _ref: string }; _ref?: string }; 
+  receiptImage?: {
+    asset?: { _ref: string; _id?: string; url?: string };
+    _ref?: string;
+  };
 }
 
 interface FetchedPassData extends Partial<PassFormData> {
   _id: string;
-  photo?: { asset: { _ref: string } };
+  photo?: { asset: { _ref: string; _id?: string; url?: string } };
   securityDocuments?: FetchedDocument[];
   financialDetails?: FetchedFinancialDetail[];
   isExempt?: boolean;
@@ -144,10 +148,10 @@ function AddPassPage() {
   const [autoFillStatus, setAutoFillStatus] = useState<AutoFillStatus>({
     isLoading: false, hasData: false, message: ''
   });
-  
+
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const securityCheckTimeoutRef = useRef<{[key: string]: NodeJS.Timeout}>({});
-  const financialCheckTimeoutRef = useRef<{[key: string]: NodeJS.Timeout}>({});
+  const securityCheckTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const financialCheckTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
   const resetFormFields = useCallback((idToKeep: string = '', forceReset: boolean = false) => {
     if (!forceReset && submitAttempted && error) return;
@@ -171,9 +175,9 @@ function AddPassPage() {
 
   const checkSecurityDocument = async (id: string, certNumber: string, docType: string) => {
     if (!certNumber || certNumber.length < 3) return;
-    
+
     // Set loading state
-    setSecurityDocuments(prev => prev.map(doc => 
+    setSecurityDocuments(prev => prev.map(doc =>
       doc.id === id ? { ...doc, isChecking: true, foundMessage: undefined } : doc
     ));
 
@@ -181,23 +185,20 @@ function AddPassPage() {
       const response = await fetch(`/api/check-document?type=security&subtype=${docType}&number=${encodeURIComponent(certNumber)}`);
       const data = await response.json();
 
-      console.log(`🔍 Check Security [${certNumber}] Response:`, data); // Debug Log
+      console.log(`🔍 Check Security [${certNumber}] Response:`, data);
 
       setSecurityDocuments(prev => prev.map(doc => {
         if (doc.id !== id) return doc;
 
         if (data.found && data.document) {
           // === SMART IMAGE FINDER ===
-          // 1. Try direct URL from API
           let previewUrl = data.document.imageUrl;
           let assetRef = data.document.asset?._ref;
 
-          // 2. If no direct URL, look for nested assets to generate one
           if (!previewUrl) {
-            // Check various locations where the asset might be hidden
-            const possibleAsset = 
-              data.document.asset || 
-              data.document.file?.asset || 
+            const possibleAsset =
+              data.document.asset ||
+              data.document.file?.asset ||
               data.document.document?.asset ||
               data.document.image?.asset;
 
@@ -207,27 +208,24 @@ function AddPassPage() {
             }
           }
 
-          // 3. Fallback date
           const foundDate = data.document.date || data.document.issueDate || doc.issueDate;
 
           return {
             ...doc,
             isChecking: false,
-            useExisting: true, // Mark as existing
-            existingDocId: assetRef || data.document._id, // Prefer asset ID, fallback to doc ID
+            useExisting: true,
+            existingDocId: assetRef || data.document._id,
             preview: previewUrl || null,
             issueDate: foundDate,
             foundMessage: 'Reference found! Linked to existing certificate.'
           };
         } else {
-          // Not found
           return {
             ...doc,
             isChecking: false,
             useExisting: false,
             existingDocId: undefined,
-            // Keep existing preview if user manually uploaded one, else null
-            preview: doc.file ? doc.preview : null, 
+            preview: doc.file ? doc.preview : null,
             foundMessage: undefined
           };
         }
@@ -239,7 +237,7 @@ function AddPassPage() {
   };
 
   const handleSecurityNumberChange = (id: string, value: string) => {
-    setSecurityDocuments(prev => prev.map(doc => 
+    setSecurityDocuments(prev => prev.map(doc =>
       doc.id === id ? { ...doc, certificateNumber: value } : doc
     ));
     if (securityCheckTimeoutRef.current[id]) clearTimeout(securityCheckTimeoutRef.current[id]);
@@ -251,7 +249,7 @@ function AddPassPage() {
 
   const checkFinancialDocument = async (id: string, receiptNo: string) => {
     if (!receiptNo || receiptNo.length < 2) return;
-    setFinancialDetails(prev => prev.map(det => 
+    setFinancialDetails(prev => prev.map(det =>
       det.id === id ? { ...det, isChecking: true, foundMessage: undefined } : det
     ));
 
@@ -292,7 +290,7 @@ function AddPassPage() {
   };
 
   const handleReceiptNumberChange = (id: string, value: string) => {
-    setFinancialDetails(prev => prev.map(det => 
+    setFinancialDetails(prev => prev.map(det =>
       det.id === id ? { ...det, receiptNumber: value } : det
     ));
     if (financialCheckTimeoutRef.current[id]) clearTimeout(financialCheckTimeoutRef.current[id]);
@@ -333,8 +331,10 @@ function AddPassPage() {
         }));
 
         if (pass.photo?.asset) {
-          setPhotoPreview(urlFor(pass.photo).url());
-          setExistingPhotoRef(pass.photo.asset._ref);
+          const photoUrl = pass.photo.asset.url || urlFor(pass.photo).url();
+          setPhotoPreview(photoUrl);
+          setExistingPhotoRef(pass.photo.asset._ref || pass.photo.asset._id);
+          console.log('📸 Auto-filled photo ref:', pass.photo.asset._ref || pass.photo.asset._id);
         } else {
           setPhotoPreview(null);
           setExistingPhotoRef(null);
@@ -356,17 +356,57 @@ function AddPassPage() {
     timeoutRef.current = setTimeout(() => fetchPassByIdNumber(idNumber), 500);
   }, [fetchPassByIdNumber]);
 
-  // === CRITICAL FIX: Load Data for Edit Mode correctly ===
   // === UPDATED DATA FETCHING FOR EDIT MODE ===
   useEffect(() => {
     if (isEditMode && editId) {
       setIsLoading(true);
       const fetchPassData = async () => {
         try {
-          // Ensure your GROQ query requests all fields, including nested assets
-          const pass = await client.fetch<FetchedPassData>(`*[_type == "employeePass" && _id == $id][0]`, { id: editId });
-          
-          console.log("🔥 FULL FETCHED DATA:", pass); // Check your browser console for this!
+          // Enhanced GROQ query with all nested fields
+          const pass = await client.fetch<FetchedPassData>(
+            `*[_type == "employeePass" && _id == $id][0]{
+              ...,
+              photo{
+                asset->{
+                  _id,
+                  _ref,
+                  url
+                }
+              },
+              securityDocuments[]{
+                _key,
+                docType,
+                certificateNumber,
+                issueDate,
+                asset->{_id, _ref, url},
+                file{asset->{_id, _ref, url}},
+                image{asset->{_id, _ref, url}},
+                scannedImage{asset->{_id, _ref, url}}
+              },
+              financialDetails[]{
+                _key,
+                receiptNumber,
+                totalAmount,
+                dateOfPayment,
+                bank,
+                paymentMethod,
+                chequeNumber,
+                isMultipleEmployees,
+                employeeCount,
+                amountPerEmployee,
+                remarks,
+                receiptImage{
+                  asset->{_id, _ref, url},
+                  _ref
+                }
+              },
+              isExempt,
+              exemptionRemarks
+            }`,
+            { id: editId }
+          );
+
+          console.log("🔥 FULL FETCHED DATA:", pass);
 
           if (pass) {
             setFormData({
@@ -390,64 +430,122 @@ function AddPassPage() {
 
             // 1. Map Photo
             if (pass.photo?.asset) {
-              setPhotoPreview(urlFor(pass.photo).url());
-              setExistingPhotoRef(pass.photo.asset._ref);
+              const photoUrl = pass.photo.asset.url || urlFor(pass.photo).url();
+              setPhotoPreview(photoUrl);
+              setExistingPhotoRef(pass.photo.asset._ref || pass.photo.asset._id || null);
+              console.log('📸 Loaded existing photo:', pass.photo.asset._ref || pass.photo.asset._id);
             }
 
-            // 2. Map Security Documents (ROBUST VERSION)
+            // 2. Map Security Documents (ENHANCED WITH DEBUG)
             if (pass.securityDocuments && Array.isArray(pass.securityDocuments)) {
-              console.log("🔍 Raw Security Docs from DB:", pass.securityDocuments);
+              console.log("🔐 Raw Security Docs from DB:", JSON.stringify(pass.securityDocuments, null, 2));
+              const mappedDocs: SecurityDocument[] = pass.securityDocuments.map((doc: FetchedDocument, index: number) => {
+                console.log(`\n--- Processing Security Doc ${index} ---`);
+                console.log('Full doc object:', doc);
 
-              const mappedDocs: SecurityDocument[] = pass.securityDocuments.map((doc: any, index: number) => {
-                // --- SMART ASSET FINDER ---
-                // We check multiple possible locations for the image asset
-                let assetRef = doc.asset?._ref || doc.file?.asset?._ref;
-                let docObject = null;
+                // SMART ASSET FINDER - Check all possible locations
+                let assetRef = null;
+                let assetUrl = null;
 
-                // 1. Direct Asset
-                if (doc.asset) docObject = { asset: doc.asset };
-                // 2. File Asset
-                else if (doc.file?.asset) docObject = { asset: doc.file.asset };
-                // 3. Common Field Names (Adjust if your schema is different)
-                else if (doc.image?.asset) {
-                   assetRef = doc.image.asset._ref;
-                   docObject = doc.image;
+                // Priority 1: Direct asset reference
+                if (doc.asset?._ref || doc.asset?._id) {
+                  assetRef = doc.asset._ref || doc.asset._id;
+                  assetUrl = doc.asset.url;
+                  console.log('✅ Found in doc.asset');
                 }
-                else if (doc.scannedImage?.asset) {
-                   assetRef = doc.scannedImage.asset._ref;
-                   docObject = doc.scannedImage;
+                // Priority 2: File.asset
+                else if (doc.file?.asset?._ref || doc.file?.asset?._id) {
+                  assetRef = doc.file.asset._ref || doc.file.asset._id;
+                  assetUrl = doc.file.asset.url;
+                  console.log('✅ Found in doc.file.asset');
+                }
+                // Priority 3: Image field
+                else if (doc.image?.asset?._ref || doc.image?.asset?._id) {
+                  assetRef = doc.image.asset._ref || doc.image.asset._id;
+                  assetUrl = doc.image.asset.url;
+                  console.log('✅ Found in doc.image.asset');
+                }
+                // Priority 4: ScannedImage field
+                else if (doc.scannedImage?.asset?._ref || doc.scannedImage?.asset?._id) {
+                  assetRef = doc.scannedImage.asset._ref || doc.scannedImage.asset._id;
+                  assetUrl = doc.scannedImage.asset.url;
+                  console.log('✅ Found in doc.scannedImage.asset');
                 }
 
-                console.log(`Security Doc ${index} -> Found Asset Ref:`, assetRef);
+                console.log(`Asset Ref: ${assetRef}, URL: ${assetUrl}`);
 
-                return {
+                // Generate preview URL
+                let previewUrl = null;
+                if (assetUrl) {
+                  previewUrl = assetUrl;
+                } else if (assetRef) {
+                  try {
+                    previewUrl = urlFor({ asset: { _ref: assetRef } }).url();
+                    console.log('✅ Generated URL from ref:', previewUrl);
+                  } catch (err) {
+                    console.error('❌ Failed to generate URL:', err);
+                  }
+                }
+
+                const mappedDoc = {
                   id: doc._key || `existing-sec-${index}`,
-                  docType: doc.docType || 'special_branch', // Default if missing
-                  certificateNumber: doc.certificateNumber || '', // Safety fix
+                  docType: doc.docType || 'special_branch',
+                  certificateNumber: doc.certificateNumber || '',
                   issueDate: doc.issueDate || '',
                   isChecking: false,
-                  useExisting: !!assetRef, // TRUE if we found an asset
-                  existingDocId: assetRef,
-                  preview: docObject ? urlFor(docObject).url() : null,
+                  useExisting: !!assetRef,
+                  existingDocId: assetRef || undefined,
+                  preview: previewUrl,
                   file: null,
                   foundMessage: assetRef ? 'Loaded from existing record' : undefined
                 };
+
+                console.log('Mapped doc result:', mappedDoc);
+                return mappedDoc;
               });
+
+              console.log('\n✅ Final mapped security documents:', mappedDocs);
               setSecurityDocuments(mappedDocs);
-              
-              // Ensure the radio button matches the docs found
+
+              // Set security clearance radio button
               if (mappedDocs.length > 0 && mappedDocs[0].docType) {
                 setFormData(prev => ({ ...prev, securityClearance: mappedDocs[0].docType }));
               }
             }
 
-            // 3. Map Financial Details
+            // 3. Map Financial Details (ENHANCED WITH DEBUG)
             if (pass.financialDetails && Array.isArray(pass.financialDetails)) {
-              const mappedFinancials: FinancialDetails[] = pass.financialDetails.map((det, index) => {
-                const assetRef = det.receiptImage?.asset?._ref || det.receiptImage?._ref;
-                const imgObject = assetRef ? { asset: { _ref: assetRef } } : null;
+              console.log("💰 Raw Financial Details from DB:", JSON.stringify(pass.financialDetails, null, 2));
 
-                return {
+              const mappedFinancials: FinancialDetails[] = pass.financialDetails.map((det, index) => {
+                console.log(`\n--- Processing Financial Detail ${index} ---`);
+
+                // Find receipt image asset
+                let assetRef = null;
+                let assetUrl = null;
+
+                if (det.receiptImage?.asset?._ref || det.receiptImage?.asset?._id) {
+                  assetRef = det.receiptImage.asset._ref || det.receiptImage.asset._id;
+                  assetUrl = det.receiptImage.asset.url;
+                  console.log('✅ Found receipt image asset:', assetRef);
+                } else if (det.receiptImage?._ref) {
+                  assetRef = det.receiptImage._ref;
+                  console.log('✅ Found receipt image ref:', assetRef);
+                }
+
+                let previewUrl = null;
+                if (assetUrl) {
+                  previewUrl = assetUrl;
+                } else if (assetRef) {
+                  try {
+                    previewUrl = urlFor({ asset: { _ref: assetRef } }).url();
+                    console.log('✅ Generated receipt URL:', previewUrl);
+                  } catch (err) {
+                    console.error('❌ Failed to generate receipt URL:', err);
+                  }
+                }
+
+                const mappedDetail = {
                   id: det._key || `existing-fin-${index}`,
                   receiptNumber: det.receiptNumber || '',
                   totalAmount: det.totalAmount || '',
@@ -460,23 +558,29 @@ function AddPassPage() {
                   amountPerEmployee: det.amountPerEmployee,
                   remarks: det.remarks,
                   isChecking: false,
-                  useExisting: !!assetRef, 
-                  existingDocId: assetRef,
-                  receiptPreview: imgObject ? urlFor(imgObject).url() : null,
+                  useExisting: !!assetRef,
+                  existingDocId: assetRef || undefined,
+                  receiptPreview: previewUrl,
                   receiptImage: null,
                   foundMessage: assetRef ? 'Loaded from existing record' : undefined
                 };
+
+                console.log('Mapped financial detail:', mappedDetail);
+                return mappedDetail;
               });
+
+              console.log('\n✅ Final mapped financial details:', mappedFinancials);
               setFinancialDetails(mappedFinancials);
             }
 
+            // 4. Map Exemption
             if (pass.isExempt) {
               setIsExempt(true);
               setExemptionRemarks(pass.exemptionRemarks || '');
             }
           }
         } catch (err) {
-          console.error(err);
+          console.error('❌ Error fetching pass data:', err);
           setError("Failed to fetch pass data.");
         } finally {
           setIsLoading(false);
@@ -514,8 +618,9 @@ function AddPassPage() {
     if (file && file.type.startsWith('image/')) {
       setPhoto(file);
       setPhotoPreview(URL.createObjectURL(file));
-      setExistingPhotoRef(null); 
+      setExistingPhotoRef(null);
       setError(null);
+      console.log('📸 New photo selected, cleared existing ref');
     } else {
       setError('Invalid file type.');
     }
@@ -570,8 +675,8 @@ function AddPassPage() {
     if (formData.securityClearance !== 'na' && securityDocuments.length === 0) return setError("Upload security docs.");
 
     for (const doc of securityDocuments) {
-       if (!doc.certificateNumber) return setError("Enter Certificate Number for all security docs.");
-       if (!doc.useExisting && !doc.file && !doc.preview) return setError("Upload image for all security docs.");
+      if (!doc.certificateNumber) return setError("Enter Certificate Number for all security docs.");
+      if (!doc.useExisting && !doc.file && !doc.preview) return setError("Upload image for all security docs.");
     }
     if (!isExempt) {
       if (financialDetails.length === 0) return setError("Add financial details.");
@@ -590,13 +695,28 @@ function AddPassPage() {
       if (key === 'areaAllowed') (value as string[]).forEach(area => submissionFormData.append('areaAllowed', area));
       else submissionFormData.append(key, value as string);
     });
-    
-    // Photo handling
+
+    // === FIXED PHOTO HANDLING ===
     if (photo) {
+      // User uploaded a new photo
       submissionFormData.append('photo', photo);
+      console.log('📸 Submitting NEW photo file');
     } else if (existingPhotoRef) {
+      // No new photo, but we have an existing reference from database
       submissionFormData.append('existingPhotoRef', existingPhotoRef);
+      console.log('📸 Using existing photo ref:', existingPhotoRef);
+    } else if (photoPreview && !photo) {
+      // Edge case: We have a preview but no file (shouldn't happen, but safe fallback)
+      console.warn('⚠️ Photo preview exists but no file or ref - photo may be missing');
     }
+
+    // Add debug logging
+    console.log('Photo submission state:', {
+      hasNewPhoto: !!photo,
+      hasExistingRef: !!existingPhotoRef,
+      hasPreview: !!photoPreview,
+      isEditMode
+    });
 
     // Security Documents handling
     securityDocuments.forEach((doc, index) => {
@@ -604,11 +724,13 @@ function AddPassPage() {
       submissionFormData.append(`securityDocumentDate_${index}`, doc.issueDate || '');
       submissionFormData.append(`securityDocumentId_${index}`, doc.id);
       submissionFormData.append(`securityDocumentNumber_${index}`, doc.certificateNumber);
-      
+
       if (doc.useExisting && doc.existingDocId) {
         submissionFormData.append(`securityDocumentRefId_${index}`, doc.existingDocId);
+        console.log(`🔐 Security Doc ${index}: Using existing ref ${doc.existingDocId}`);
       } else if (doc.file) {
         submissionFormData.append(`securityDocument_${index}`, doc.file);
+        console.log(`🔐 Security Doc ${index}: Uploading new file`);
       }
     });
 
@@ -626,16 +748,18 @@ function AddPassPage() {
         if (detail.amountPerEmployee) submissionFormData.append(`financialDetail_${index}_amountPerEmployee`, detail.amountPerEmployee);
 
         // Debug: Log what we are sending for this financial detail
-        console.log(`Submitting Financial Detail ${index}:`, {
-            useExisting: detail.useExisting,
-            existingDocId: detail.existingDocId,
-            hasNewFile: !!detail.receiptImage
+        console.log(`💰 Submitting Financial Detail ${index}:`, {
+          useExisting: detail.useExisting,
+          existingDocId: detail.existingDocId,
+          hasNewFile: !!detail.receiptImage
         });
 
         if (detail.useExisting && detail.existingDocId) {
-             submissionFormData.append(`financialDetailRefId_${index}`, detail.existingDocId);
+          submissionFormData.append(`financialDetailRefId_${index}`, detail.existingDocId);
+          console.log(`💰 Financial ${index}: Using existing ref ${detail.existingDocId}`);
         } else if (detail.receiptImage) {
-             submissionFormData.append(`financialDetail_${index}_receiptImage`, detail.receiptImage);
+          submissionFormData.append(`financialDetail_${index}_receiptImage`, detail.receiptImage);
+          console.log(`💰 Financial ${index}: Uploading new receipt`);
         }
       });
     }
@@ -644,6 +768,15 @@ function AddPassPage() {
     if (exemptionRemarks) submissionFormData.append('exemptionRemarks', exemptionRemarks);
     if (isEditMode) submissionFormData.append('id', editId as string);
 
+    // Final debug log
+    console.log('📤 Form submission summary:', {
+      photoType: photo ? 'new' : existingPhotoRef ? 'existing' : 'none',
+      securityDocsCount: securityDocuments.length,
+      financialDetailsCount: financialDetails.length,
+      isExempt,
+      isEditMode
+    });
+
     try {
       const response = await fetch(isEditMode ? '/api/update-pass' : '/api/add-pass', {
         method: isEditMode ? 'PATCH' : 'POST',
@@ -651,8 +784,8 @@ function AddPassPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
-      setSuccessMessage("Success! Pass Created.");
-      if(!isEditMode) { (e.target as HTMLFormElement).reset(); resetFormFields('', true); }
+      setSuccessMessage(isEditMode ? "Success! Pass Updated." : "Success! Pass Created.");
+      if (!isEditMode) { (e.target as HTMLFormElement).reset(); resetFormFields('', true); }
       else setTimeout(() => router.push('/database'), 2000);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Error submitting form.");
@@ -685,7 +818,7 @@ function AddPassPage() {
             </div>
           </div>
         )}
-        
+
         {successMessage && (
           <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
             <div className="flex items-start">
@@ -698,7 +831,7 @@ function AddPassPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          
+
           {/* Personal Details */}
           <section className="bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-xl p-6">
             <div className="flex items-center mb-6 pb-4 border-b border-blue-200">
@@ -760,13 +893,13 @@ function AddPassPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Pass Year</label>
                 <select value={selectedYear} onChange={handleYearChange} disabled={isEditMode} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all disabled:bg-gray-100">
                   <option value="">Select Year (Manual Dates)</option>
-                  {Array.from({length: 5}, (_, i) => currentYear + i).map(y => <option key={y} value={y}>{y}</option>)}
+                  {Array.from({ length: 5 }, (_, i) => currentYear + i).map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
               <div><label className="block text-sm font-medium text-gray-700 mb-2">Date of Entry <span className="text-red-500">*</span></label><input type="date" name="dateOfEntry" value={formData.dateOfEntry} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-2">Date of Expiry <span className="text-red-500">*</span></label><input type="date" name="dateOfExpiry" value={formData.dateOfExpiry} onChange={handleInputChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" /></div>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Areas Allowed <span className="text-red-500">*</span></label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -809,9 +942,9 @@ function AddPassPage() {
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">Security Clearance Type</label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[{v:'special_branch',l:'Special Branch Police',icon:'🛡️'}, {v:'local_police',l:'Local Police',icon:'👮'}, {v:'na',l:'Not Applicable',icon:'❌'}].map(o=>(
-                  <label key={o.v} className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${formData.securityClearance===o.v ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
-                    <input type="radio" name="securityClearance" value={o.v} checked={formData.securityClearance===o.v} onChange={handleInputChange} className="h-4 w-4 text-orange-600 focus:ring-orange-500" />
+                {[{ v: 'special_branch', l: 'Special Branch Police', icon: '🛡️' }, { v: 'local_police', l: 'Local Police', icon: '👮' }, { v: 'na', l: 'Not Applicable', icon: '❌' }].map(o => (
+                  <label key={o.v} className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${formData.securityClearance === o.v ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
+                    <input type="radio" name="securityClearance" value={o.v} checked={formData.securityClearance === o.v} onChange={handleInputChange} className="h-4 w-4 text-orange-600 focus:ring-orange-500" />
                     <span className="ml-3 text-2xl">{o.icon}</span>
                     <span className="ml-2 text-sm font-medium text-gray-900">{o.l}</span>
                   </label>
@@ -1139,11 +1272,11 @@ function AddPassPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Upload Employee Photo</label>
-              <div 
-                onClick={() => fileInputRef.current?.click()} 
-                onDrop={(e)=>{e.preventDefault(); setIsDraggingOver(false); if(e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0])}} 
-                onDragOver={(e)=>{e.preventDefault(); setIsDraggingOver(true)}} 
-                onDragLeave={()=>{setIsDraggingOver(false)}} 
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDrop={(e) => { e.preventDefault(); setIsDraggingOver(false); if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]) }}
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true) }}
+                onDragLeave={() => { setIsDraggingOver(false) }}
                 className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${isDraggingOver ? 'border-pink-500 bg-pink-50' : 'border-gray-300 hover:border-pink-400 bg-gray-50'}`}
               >
                 <input ref={fileInputRef} type="file" name="photo" accept="image/*" onChange={handlePhotoChange} className="hidden" />
@@ -1152,7 +1285,10 @@ function AddPassPage() {
                     <Image src={photoPreview} alt="Preview" width={150} height={150} className="rounded-lg border-4 border-white shadow-lg object-cover mb-3" />
                     <p className="text-sm text-gray-600">Click to change photo</p>
                     {existingPhotoRef && !photo && (
-                        <p className="text-xs text-green-600 mt-1 font-medium">Using photo from database</p>
+                      <p className="text-xs text-green-600 mt-1 font-medium">✓ Using photo from database</p>
+                    )}
+                    {photo && (
+                      <p className="text-xs text-blue-600 mt-1 font-medium">✓ New photo selected</p>
                     )}
                   </div>
                 ) : (
@@ -1170,16 +1306,16 @@ function AddPassPage() {
 
           {/* Submit Button */}
           <div className="flex justify-end gap-4">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => router.back()}
               className="px-6 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
-            <button 
-              type="submit" 
-              disabled={isLoading} 
+            <button
+              type="submit"
+              disabled={isLoading}
               className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
             >
               {isLoading ? (

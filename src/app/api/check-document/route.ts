@@ -1,5 +1,12 @@
+// /src/app/api/check-document/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { client } from '@/sanity/lib/client';
+
+// Define the shape of your query parameters
+interface QueryParams {
+  number: string;
+  subtype?: string | null;
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -11,7 +18,9 @@ export async function GET(req: NextRequest) {
 
   try {
     let query = '';
-    let params: any = { number };
+    
+    // Fix: Use 'const' and apply the interface instead of 'any'
+    const params: QueryParams = { number };
 
     if (type === 'security') {
       // Find a pass that contains a security document with this certificate number and type

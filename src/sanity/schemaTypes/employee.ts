@@ -1,3 +1,4 @@
+// ./src/sanity/schemaTypes/employee.ts
 import { defineField, defineType } from 'sanity';
 
 export default defineType({
@@ -17,7 +18,7 @@ export default defineType({
     defineField({
       name: 'passId',
       title: 'Pass ID',
-      type: 'number',
+      type: 'string', 
       readOnly: true,
       fieldset: 'passDetails',
       validation: (Rule) => Rule.required(),
@@ -168,7 +169,7 @@ export default defineType({
       fieldset: 'securityDetails',
     }),
     
-    // === UPDATED: Security Documents Field ===
+    // === SECURITY DOCUMENTS ===
     defineField({
       name: 'securityDocuments',
       title: 'Security Clearance Documents',
@@ -185,34 +186,45 @@ export default defineType({
                 { title: 'Special Branch', value: 'special_branch' },
                 { title: 'Local Police', value: 'local_police' }
               ]
-            }
+            },
+            validation: Rule => Rule.required()
           },
-          // !!! ADD THIS FIELD !!!
           {
             name: 'certificateNumber',
             type: 'string',
-            title: 'Certificate Number'
+            title: 'Certificate Number',
+            validation: Rule => Rule.required()
           },
           {
             name: 'issueDate',
             type: 'date',
             title: 'Issue Date'
           },
-          // Use 'image' type instead of 'file' for easier previews
           {
-            name: 'asset', // I changed this from 'document' to 'asset' to match frontend logic easier
+            name: 'asset',
             type: 'image',
             title: 'Document Image',
             options: {
               hotspot: true
-            }
+            },
+            validation: Rule => Rule.required()
           }
         ],
         preview: {
           select: {
-            title: 'docType',
-            subtitle: 'certificateNumber',
+            title: 'certificateNumber',
+            subtitle: 'docType',
             media: 'asset'
+          },
+          // FIX 1: Using ReactNode type to satisfy assignability
+          prepare(selection: { title?: string; subtitle?: string; media?: import('react').ReactNode }) {
+            const { title, subtitle } = selection;
+            const typeLabel = subtitle === 'special_branch' ? 'Special Branch' : 'Local Police';
+            return {
+              title: title || 'No Certificate Number',
+              subtitle: typeLabel,
+              media: selection.media
+            };
           }
         }
       }],
@@ -236,7 +248,7 @@ export default defineType({
       hidden: ({ document }) => !document?.isExempt,
     }),
     
-    // --- FINANCIAL DETAILS ---
+    // --- FINANCIAL DETAILS ===
     defineField({
       name: 'financialDetails',
       title: 'Payment Records',
@@ -323,9 +335,29 @@ export default defineType({
             name: 'receiptImage',
             type: 'image',
             title: 'Receipt Image',
+            options: {
+              hotspot: true
+            },
             validation: Rule => Rule.required()
           }
-        ]
+        ],
+        preview: {
+          select: {
+            title: 'receiptNumber',
+            subtitle: 'totalAmount',
+            date: 'dateOfPayment',
+            media: 'receiptImage'
+          },
+          // FIX 2: Using ReactNode type to satisfy assignability
+          prepare(selection: { title?: string; subtitle?: string; date?: string; media?: import('react').ReactNode }) {
+            const { title, subtitle, date } = selection;
+            return {
+              title: `Receipt: ${title || 'N/A'}`,
+              subtitle: `Amount: ${subtitle || 'N/A'} | Date: ${date || 'N/A'}`,
+              media: selection.media
+            };
+          }
+        }
       }],
       fieldset: 'feeDetails',
       hidden: ({ document }) => Boolean(document?.isExempt),
@@ -340,4 +372,23 @@ export default defineType({
       readOnly: true,
     }),
   ],
+  preview: {
+    select: {
+      title: 'name',
+      subtitle: 'organization',
+      media: 'photo',
+      passId: 'passId',
+      category: 'category'
+    },
+    // FIX 3: Using ReactNode type to satisfy assignability
+    prepare(selection: { title?: string; subtitle?: string; passId?: string; category?: string; media?: import('react').ReactNode }) {
+      const { title, subtitle, passId, category } = selection;
+      const categoryLabel = category === 'cargo' ? '📦 Cargo' : '🏢 Landside';
+      return {
+        title: `${passId ? `#${passId}` : ''} - ${title || 'Unnamed'}`,
+        subtitle: `${categoryLabel} | ${subtitle || 'No Organization'}`,
+        media: selection.media
+      };
+    },
+  },
 });
