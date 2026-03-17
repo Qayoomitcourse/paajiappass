@@ -168,7 +168,7 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
           </div>
 
           <div className="mt-auto text-right leading-tight">
-            <p className="font-bold text-[13px]">Joint Director Vigilance</p>
+            <p className="font-bold text-[13px]">Deputy Director Vigilance</p>
             <p className="text-[10px] leading-tight">
               Pakistan Airports Authority
             </p>
