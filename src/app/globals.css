@@ -52,8 +52,8 @@ body {
   }
 
   .print-card {
-    width: 70mm;
-    height: 95mm;
+    width: 63.5mm;
+    height: 88.9mm;
     margin: 0 auto;
     border: 1px solid #333;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
@@ -63,8 +63,8 @@ body {
   }
 
   .print-card-placeholder {
-    width: 70mm;
-    height: 95mm;
+    width: 63.5mm;
+    height: 88.9mm;
     margin: 0 auto;
     visibility: hidden;
   }
@@ -138,8 +138,8 @@ body {
   }
 
   .print-card {
-    width: 70mm !important;
-    height: 95mm !important;
+    width: 63.5mm !important;
+    height: 88.9mm !important;
     margin: 0 !important;
     border: 2px solid #333 !important;
     box-shadow: none !important;
