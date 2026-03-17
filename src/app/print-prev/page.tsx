@@ -51,7 +51,7 @@ const IDCardFront_2025 = ({ employee }: { employee: Employee }) => {
                 </div>
                 <div className="flex justify-center items-end pt-1">
                     <div className="text-center flex-1 leading-tight">
-                        <p className="font-bold text-[13px]">Deputy Director Vigilance</p>
+                        <p className="font-bold text-[13px]">Dy. Director Vigilance</p>
                         <p className="text-[10px] leading-tight">Pakistan Airports Authority</p>
                         <p className="text-[10px] leading-tight">JIAP - Karachi</p>
                     </div>
@@ -168,7 +168,7 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
           </div>
 
           <div className="mt-auto text-right leading-tight">
-            <p className="font-bold text-[13px]">Deputy Director Vigilance</p>
+            <p className="font-bold text-[13px]">Dy. Director Vigilance</p>
             <p className="text-[10px] leading-tight">
               Pakistan Airports Authority
             </p>
