@@ -224,8 +224,8 @@ body {
   .print-card div[style*="height: '25mm'"] { height: 30mm !important; }
 
   /* Back page shift */
-  .print-page.back-page {
+  /* .print-page.back-page {
     padding-left: 29.2mm !important;
     padding-right: 21.7mm !important;
   }
-}
+} */
