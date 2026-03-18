@@ -226,6 +226,6 @@ body {
   /* Back page shift */
   .print-page.back-page {
     padding-left: 27.2mm !important;
-    padding-right: 21.7mm !important;
+    padding-right: 20.7mm !important;
   }
 }
