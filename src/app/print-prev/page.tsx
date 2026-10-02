@@ -14,6 +14,7 @@ interface Employee {
   organization: string;
   cnic: string;
   dateOfExpiry: string;
+  dateOfIssue?: string | null; // NEW (2027 back side). Optional – blank line is printed if missing.
   category: 'cargo' | 'landside';
   photo?: string | null;
   areaAllowed?: string[];
@@ -21,13 +22,19 @@ interface Employee {
 
 const formatDisplayPassId = (pid: number): string => String(pid).padStart(4, '0');
 const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const formatDateUpper = (dateString: string) => formatDate(dateString).replace(/\./g, '').toUpperCase();
+
+// Shared helper so every design builds the QR link the same way
+const buildQrUrl = (employee: Employee, year: number) => {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+  return `${baseUrl}/${employee.category}-id/${employee.passId}?year=${year}`;
+};
 
 // --- DESIGN FOR 2025 AND EARLIER (UNCHANGED) ---
 const IDCardFront_2025 = ({ employee }: { employee: Employee }) => {
     const displayPassId = formatDisplayPassId(employee.passId);
     const functionaryYear = new Date(employee.dateOfExpiry).getFullYear();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
-    const qrCodeUrl = `${baseUrl}/${employee.category}-id/${employee.passId}?year=${functionaryYear}`;
+    const qrCodeUrl = buildQrUrl(employee, functionaryYear);
     const headingText = employee.category === 'landside' ? "JINNAH INT'L AIRPORT" : "CARGO COMPLEX";
     return (
         <div className="w-full h-full bg-white flex flex-col" style={{ fontFamily: "Arial, sans-serif", border: '2px solid black' }}>
@@ -79,14 +86,11 @@ const IDCardBack_2025 = ({ employee }: { employee: Employee }) => {
 };
 
 
-// --- DESIGN FOR 2026 AND LATER (UPDATED LAYOUT) ---
+// --- DESIGN FOR 2026 (UNCHANGED) ---
 const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
   const displayPassId = formatDisplayPassId(employee.passId);
   const functionaryYear = new Date(employee.dateOfExpiry).getFullYear();
-  const baseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    (typeof window !== "undefined" ? window.location.origin : "");
-  const qrCodeUrl = `${baseUrl}/${employee.category}-id/${employee.passId}?year=${functionaryYear}`;
+  const qrCodeUrl = buildQrUrl(employee, functionaryYear);
   const headingText =
     employee.category === "landside" ? "JIAP KARACHI" : "CARGO COMPLEX";
 
@@ -114,10 +118,8 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
         <p>VALID UPTO {formatDate(employee.dateOfExpiry)}</p>
       </div>
 
-      {/* Main Card Content */}
       <div className="flex-1 flex flex-col bg-white p-1 relative">
         <div className="flex justify-between items-start">
-          {/* QR Code (kept in previous position) */}
           <div className="flex flex-col mt-2 items-center" style={{ width: "25mm" }}>
             <div style={{ width: "25mm", height: "24mm" }}>
               <QRCodeSVG
@@ -128,7 +130,6 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
             </div>
           </div>
 
-          {/* Photo */}
           <div className="relative" style={{ width: "30mm", height: "30mm" }}>
             <div className="border border-gray-200 rounded overflow-hidden w-full h-full">
               {employee.photo ? (
@@ -150,7 +151,6 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
           </div>
         </div>
 
-        {/* Area Allowed */}
         <div
           className="text-center text-white font-bold leading-tight"
           style={{ backgroundColor: "#006400", fontSize: "22px" }}
@@ -158,7 +158,6 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
           <p>{employee.areaAllowed?.join(" | ") || "N/A"}</p>
         </div>
 
-        {/* Person Info */}
         <div className="text-center flex-grow flex flex-col leading-tight mt-1">
           <div>
             <p className="font-bold text-[15px]">{employee.name}</p>
@@ -176,7 +175,6 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
           </div>
         </div>
 
-        {/* Pass ID */}
         <div className="absolute bottom-0 left-0">
           <div
             style={{ backgroundColor: "#FFD700" }}
@@ -193,7 +191,6 @@ const IDCardFront_2026 = ({ employee }: { employee: Employee }) => {
   );
 };
 
-// --- UPDATED BACK SIDE (FUNCTIONARY + YEAR MOVED HERE) ---
 const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
   const barcodeData = `${formatDisplayPassId(employee.passId)} | ${employee.name} | ${employee.cnic}`;
   const functionaryYear = new Date(employee.dateOfExpiry).getFullYear();
@@ -207,7 +204,6 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
         fontSize: "8px",
       }}
     >
-      {/* Top: FUNCTIONARY & YEAR */}
       <div
         className="text-center font-bold text-white py-1"
         style={{ backgroundColor: "red", fontSize: "16px", lineHeight: "1.2" }}
@@ -215,7 +211,6 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
         <p>FUNCTIONARY {functionaryYear}</p>
       </div>
 
-      {/* Barcode */}
       <div className="flex flex-col items-center border-b border-black py-0">
         <Barcode
           value={barcodeData}
@@ -227,7 +222,6 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
         />
       </div>
 
-      {/* Header Row */}
       <div className="flex items-center justify-between text-black px-1 mt-0">
         <div className="w-13 h-9 flex items-center">
           <Image
@@ -244,7 +238,6 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
         <div style={{ width: "52px" }}></div>
       </div>
 
-      {/* Notice */}
       <div
         className="text-center border-y border-black"
         style={{ backgroundColor: "#FFD700" }}
@@ -254,7 +247,6 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
         </p>
       </div>
 
-      {/* Instructions */}
       <div className="flex-1 flex flex-col text-justify font-bold leading-tight">
         <div className="space-y-0.5 px-1">
           <p className="flex items-start text-[11px]">
@@ -280,7 +272,6 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
           </p>
         </div>
 
-        {/* Contact Info */}
         <div
           className="mt-auto text-[13px] py-1 text-white text-center"
           style={{ backgroundColor: "#006400" }}
@@ -290,6 +281,198 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
           </p>
           <p className="leading-tight">Vigilance Branch JIAP Karachi</p>
           <p className="font-bold leading-tight">021-99071420 & 99071468</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// --- DESIGN FOR 2027 AND LATER: YELLOW HORIZONTAL (NEW) ---
+// Landscape card, 86mm x 54mm. Works for both cargo and landside.
+const YELLOW_2027 = '#ffd400';
+
+const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
+  const displayPassId = formatDisplayPassId(employee.passId);
+  const functionaryYear = new Date(employee.dateOfExpiry).getFullYear();
+  const qrCodeUrl = buildQrUrl(employee, functionaryYear);
+  const headingText = employee.category === 'landside' ? 'JIAP KARACHI' : 'CARGO COMPLEX JIAP';
+
+  return (
+    <div
+      className="w-full h-full bg-white flex flex-col overflow-hidden"
+      style={{ fontFamily: 'Arial, sans-serif', border: '2px solid black', borderRadius: '6px', color: '#000' }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-end justify-between px-2 py-0.5"
+        style={{ backgroundColor: YELLOW_2027, borderBottom: '3px solid black' }}
+      >
+        <div className="leading-none">
+          <p className="font-black text-[17px] tracking-wide leading-none">{headingText}</p>
+          <p className="font-bold text-[7px] mt-0.5" style={{ letterSpacing: '0.18em' }}>
+            AFU FUNCTIONARY PASS
+          </p>
+        </div>
+        <p className="font-black text-[24px] leading-none">{functionaryYear}</p>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 flex flex-col px-2 pt-1.5 min-h-0">
+        <div className="flex gap-2 flex-1 min-h-0">
+          {/* Photo */}
+          <div
+            className="shrink-0 border border-gray-300 overflow-hidden"
+            style={{ width: '22mm', height: '26mm', backgroundColor: '#e5e5e5' }}
+          >
+            {employee.photo ? (
+              <Image
+                src={employee.photo}
+                alt={employee.name}
+                width={83}
+                height={98}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <div className="text-[8px] text-center p-1">NO PHOTO</div>
+            )}
+          </div>
+
+          {/* Details */}
+          <div className="flex-1 min-w-0 flex flex-col leading-tight">
+            <p className="font-black text-[12px] leading-tight break-words">{employee.name}</p>
+            <p className="text-[8.5px] leading-tight break-words">{employee.designation}</p>
+            <p className="text-[8.5px] leading-tight break-words">{employee.organization}</p>
+            <p className="text-[8.5px] leading-tight">{employee.cnic}</p>
+            <div className="mt-auto">
+              <span
+                className="inline-block font-black text-[9px] px-1"
+                style={{ backgroundColor: YELLOW_2027, border: '1.5px solid black' }}
+              >
+                {employee.areaAllowed?.join(' | ') || 'N/A'}
+              </span>
+            </div>
+          </div>
+
+          {/* Valid upto + QR */}
+          <div className="shrink-0 flex flex-col items-center gap-1" style={{ width: '17mm' }}>
+            <div
+              className="w-full text-center leading-none py-0.5"
+              style={{ backgroundColor: YELLOW_2027, border: '1.5px solid black' }}
+            >
+              <p className="font-bold text-[5.5px]" style={{ letterSpacing: '0.2em' }}>VALID UPTO</p>
+              <p className="font-black text-[8px] whitespace-nowrap">{formatDateUpper(employee.dateOfExpiry)}</p>
+            </div>
+            <div style={{ width: '17mm', height: '17mm' }}>
+              <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%' }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Signature + Pass No */}
+        <div className="flex items-end justify-between gap-2 pb-1 pt-0.5">
+          <div className="flex-1 leading-tight">
+            <div style={{ borderTop: '1px solid black', height: '10px' }} />
+            <p className="font-bold text-[6.5px]">Signature of Issuing Officer</p>
+            <p className="text-[6.5px]">Joint Director Vigilance, PAA JIAP Karachi</p>
+          </div>
+          <div className="text-center leading-none px-2 py-0.5" style={{ border: '1.5px solid black' }}>
+            <p className="font-bold text-[5.5px]" style={{ letterSpacing: '0.2em' }}>PASS NO.</p>
+            <p className="font-black text-[14px]">{displayPassId}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="text-center font-bold text-[6.5px] py-0.5"
+        style={{ backgroundColor: YELLOW_2027, borderTop: '3px solid black' }}
+      >
+        Pakistan Airports Authority · Vigilance Branch · JIAP Karachi
+      </div>
+    </div>
+  );
+};
+
+const IDCardBack_2027 = ({ employee }: { employee: Employee }) => {
+  const functionaryYear = new Date(employee.dateOfExpiry).getFullYear();
+  const barcodeData = `${formatDisplayPassId(employee.passId)} | ${employee.name} | ${employee.cnic}`;
+  const instructions = [
+    'Valid only when worn and displayed.',
+    'Holder is not exempt from body or baggage search.',
+    'Use only in the area and route of validity shown on this pass.',
+    'Misuse, photocopying or use by any other person or department leads to cancellation.',
+    'Surrender immediately on leaving the post for which it was issued.',
+  ];
+
+  return (
+    <div
+      className="w-full h-full bg-white flex flex-col overflow-hidden"
+      style={{ fontFamily: 'Arial, sans-serif', border: '2px solid black', borderRadius: '6px', color: '#000' }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-2 py-0.5"
+        style={{ backgroundColor: YELLOW_2027, borderBottom: '3px solid black' }}
+      >
+        <p className="font-black text-[13px]" style={{ letterSpacing: '0.12em' }}>INSTRUCTIONS</p>
+        <p className="font-black text-[9px] px-1.5" style={{ backgroundColor: 'black', color: YELLOW_2027 }}>
+          {functionaryYear}
+        </p>
+      </div>
+
+      <div className="flex-1 flex flex-col px-2 pt-1 min-h-0">
+        {/* Barcode */}
+        <div className="barcode-2027 w-full flex flex-col items-center overflow-hidden">
+          <Barcode value={barcodeData} width={0.5} height={22} format="CODE128" displayValue={false} margin={0} />
+          <p className="text-[5.5px] leading-none mt-0.5 font-mono">{barcodeData}</p>
+        </div>
+
+        {/* Notice */}
+        <div className="mt-1">
+          <span className="inline-block font-bold text-[7px] px-1.5 py-0.5" style={{ backgroundColor: 'black', color: YELLOW_2027 }}>
+            Pass holder is not PAA/Govt employee
+          </span>
+        </div>
+
+        {/* Instructions */}
+        <div className="mt-1 space-y-[2px]">
+          {instructions.map((text, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <span
+                className="shrink-0 font-black text-[6.5px] w-[10px] h-[10px] flex items-center justify-center"
+                style={{ backgroundColor: YELLOW_2027 }}
+              >
+                {i + 1}
+              </span>
+              <p className="text-[6.5px] leading-[10px]">{text}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Date of issue */}
+        <div className="mt-auto mb-1 flex items-stretch w-fit" style={{ border: '1.5px solid ' + YELLOW_2027 }}>
+          <span className="font-black text-[6.5px] px-1.5 flex items-center" style={{ backgroundColor: YELLOW_2027, letterSpacing: '0.1em' }}>
+            DATE OF ISSUE
+          </span>
+          <span className="font-black text-[9px] px-2 min-w-[22mm]">
+            {employee.dateOfIssue ? formatDateUpper(employee.dateOfIssue) : '\u00A0'}
+          </span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="flex items-center justify-between px-2 py-0.5"
+        style={{ backgroundColor: YELLOW_2027, borderTop: '3px solid black' }}
+      >
+        <div className="leading-tight">
+          <p className="font-bold text-[5.5px]" style={{ letterSpacing: '0.12em' }}>FOUND THIS PASS? REPORT IMMEDIATELY TO</p>
+          <p className="font-black text-[8px]">Vigilance Branch, JIAP Karachi</p>
+        </div>
+        <div className="text-right leading-tight font-mono font-bold text-[7.5px]">
+          <p>021-99071420</p>
+          <p>021-99071468</p>
         </div>
       </div>
     </div>
@@ -311,13 +494,15 @@ export default function PrintCardsPage() {
     setLoading(true); setError(null); setSuccessMessage(null); setEmployeesToPrint([]);
     const tokens = passIdsInput.split(/[\s,]+/).filter(Boolean);
     const expandedIds: string[] = [];
-    tokens.forEach(token => {
+    // for...of (instead of forEach) so an invalid range really stops the request
+    for (const token of tokens) {
       if (token.includes('-')) {
         const [start, end] = token.split('-').map(Number);
-        if (!isNaN(start) && !isNaN(end) && start <= end) for (let i = start; i <= end; i++) expandedIds.push(i.toString());
-        else { setError(`Invalid range: "${token}"`); setLoading(false); return; }
+        if (!isNaN(start) && !isNaN(end) && start <= end) {
+          for (let i = start; i <= end; i++) expandedIds.push(i.toString());
+        } else { setError(`Invalid range: "${token}"`); setLoading(false); return; }
       } else if (!isNaN(Number(token))) expandedIds.push(token);
-    });
+    }
     const uniqueIds = Array.from(new Set(expandedIds));
     if (uniqueIds.length === 0) { setError('Please enter at least one valid Pass ID.'); setLoading(false); return; }
     if (uniqueIds.length > 6) { setError('You can print a maximum of 6 cards at a time.'); setLoading(false); return; }
@@ -338,14 +523,21 @@ export default function PrintCardsPage() {
   
   const availableYears = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() + i).toString());
 
+  // Pick the design by year: 2027+ yellow horizontal, 2026 green, 2025 and earlier blue
   const selectedYearNumber = parseInt(year, 10);
-  const CardFront = selectedYearNumber >= 2026 ? IDCardFront_2026 : IDCardFront_2025;
-  const CardBack = selectedYearNumber >= 2026 ? IDCardBack_2026 : IDCardBack_2025;
+  const isLandscape = selectedYearNumber >= 2027;
+  const CardFront =
+    selectedYearNumber >= 2027 ? IDCardFront_2027 :
+    selectedYearNumber >= 2026 ? IDCardFront_2026 : IDCardFront_2025;
+  const CardBack =
+    selectedYearNumber >= 2027 ? IDCardBack_2027 :
+    selectedYearNumber >= 2026 ? IDCardBack_2026 : IDCardBack_2025;
+  const pageClass = isLandscape ? 'landscape-cards' : '';
   
   const frontSideSlots = Array(6).fill(null).map((_, i) => employeesToPrint[i] || ({ _id: `ph-f-${i}` } as Employee));
   const arrangedBackSide = (() => {
     const result: (Employee | null)[] = Array(6).fill(null);
-    const positions = [1, 0, 3, 2, 5, 4];
+    const positions = [1, 0, 3, 2, 5, 4]; // mirrored columns for double-sided printing
     employeesToPrint.forEach((employee, index) => { if(index < 6) result[positions[index]] = employee; });
     return result;
   })();
@@ -385,14 +577,14 @@ export default function PrintCardsPage() {
       <main className="print-root">
         {employeesToPrint.length > 0 && (
           <div className="print-area">
-            <div className="print-page front-page">
+            <div className={`print-page front-page ${pageClass}`}>
               {frontSideSlots.map((employee, index) => (
                 employee.passId ? (
                   <div key={`${employee._id}-front-${index}`} className="print-card"><CardFront employee={employee} /></div>
                 ) : <div key={`ph-f-${index}`} className="print-card-placeholder"></div>
               ))}
             </div>
-            <div className="print-page back-page">
+            <div className={`print-page back-page ${pageClass}`}>
               {arrangedBackSide.map((employee, index) => (
                 employee ? (
                   <div key={`${employee._id}-back-${index}`} className="print-card"><CardBack employee={employee} /></div>
@@ -403,7 +595,23 @@ export default function PrintCardsPage() {
         )}
       </main>
       <style jsx global>{`
-        /* ... Your print CSS is correct and unchanged ... */
+        /* ... KEEP YOUR EXISTING PRINT CSS HERE (unchanged) ... */
+
+        /* --- 2027 landscape cards (86mm x 54mm), 2 columns x 3 rows per A4 page --- */
+        .print-page.landscape-cards {
+          display: grid;
+          grid-template-columns: repeat(2, 86mm);
+          grid-auto-rows: 54mm;
+          gap: 6mm 4mm;
+          justify-content: center;
+          align-content: start;
+        }
+        .print-page.landscape-cards .print-card,
+        .print-page.landscape-cards .print-card-placeholder {
+          width: 86mm;
+          height: 54mm;
+        }
+        .barcode-2027 svg { max-width: 100%; height: auto; }
       `}</style>
     </div>
   );
