@@ -539,7 +539,7 @@ export default function PrintCardsPage() {
   const arrangedBackSide = (() => {
     const result: (Employee | null)[] = Array(6).fill(null);
     // Mirrored columns for double-sided printing: 2 columns (portrait) or 3 columns (2027 landscape)
-    const positions = isLandscape ? [2, 1, 0, 5, 4, 3] : [1, 0, 3, 2, 5, 4];
+    const positions = isLandscape ? [1, 0, 3, 2, 5, 4] : [1, 0, 3, 2, 5, 4];
     employeesToPrint.forEach((employee, index) => { if(index < 6) result[positions[index]] = employee; });
     return result;
   })();
@@ -597,40 +597,149 @@ export default function PrintCardsPage() {
         )}
       </main>
       <style jsx global>{`
-        /* ... KEEP YOUR EXISTING PRINT CSS HERE (unchanged) ... */
+        /* ============================================================
+           PRINT SETTINGS
+           ============================================================ */
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
 
-        /* --- 2027 landscape cards (86mm x 54mm), 3 columns x 2 rows on A4 landscape --- */
+        .print-page,
+        .print-card,
+        .print-card-placeholder {
+          box-sizing: border-box;
+        }
+
+        /* ============================================================
+           2027 HORIZONTAL PASS
+           Exact card: 86mm x 54mm
+           Sheet: A4 Landscape = 297mm x 210mm
+           Layout: 2 columns x 3 rows
+           ============================================================ */
         .print-page.landscape-cards {
+          width: 297mm;
+          height: 210mm;
           display: grid;
-          grid-template-columns: repeat(3, 86mm);
-          grid-auto-rows: 54mm;
-          gap: 8mm 5mm;
+          grid-template-columns: repeat(2, 86mm);
+          grid-template-rows: repeat(3, 54mm);
+          column-gap: 12mm;
+          row-gap: 6mm;
           justify-content: center;
           align-content: center;
+          margin: 0 auto;
+          padding: 0;
+          box-sizing: border-box;
         }
+
         .print-page.landscape-cards .print-card,
         .print-page.landscape-cards .print-card-placeholder {
-          width: 86mm;
-          height: 54mm;
+          width: 86mm !important;
+          height: 54mm !important;
+          min-width: 86mm;
+          max-width: 86mm;
+          min-height: 54mm;
+          max-height: 54mm;
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          overflow: hidden;
         }
+
+        .print-page.landscape-cards .print-card > div {
+          width: 86mm !important;
+          height: 54mm !important;
+          min-width: 86mm;
+          max-width: 86mm;
+          min-height: 54mm;
+          max-height: 54mm;
+          margin: 0;
+          box-sizing: border-box;
+        }
+
         ${isLandscape ? `
-        @page { size: A4 landscape; margin: 0; }
+        /* Browser print preview must use the physical A4 landscape sheet size. */
+        @page {
+          size: A4 landscape;
+          margin: 0;
+        }
+
         @media print {
-          .print-page.landscape-cards {
+          html,
+          body {
             width: 297mm;
             height: 210mm;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          body {
+            overflow: hidden;
+          }
+
+          .no-print {
+            display: none !important;
+          }
+
+          .print-root,
+          .print-area {
+            width: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .print-page.landscape-cards {
+            width: 297mm !important;
+            height: 210mm !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, 86mm) !important;
+            grid-template-rows: repeat(3, 54mm) !important;
+            column-gap: 12mm !important;
+            row-gap: 6mm !important;
+            justify-content: center !important;
+            align-content: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
             box-sizing: border-box;
             page-break-after: always;
             break-after: page;
           }
+
           .print-page.landscape-cards.back-page {
             page-break-after: auto;
             break-after: auto;
           }
-        }` : ''}
-        .barcode-2027 svg { max-width: 100%; height: auto; }
+
+          .print-page.landscape-cards .print-card,
+          .print-page.landscape-cards .print-card-placeholder {
+            width: 86mm !important;
+            height: 54mm !important;
+            min-width: 86mm !important;
+            max-width: 86mm !important;
+            min-height: 54mm !important;
+            max-height: 54mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box;
+            overflow: hidden;
+          }
+
+          .print-page.landscape-cards .print-card > div {
+            width: 86mm !important;
+            height: 54mm !important;
+            min-width: 86mm !important;
+            max-width: 86mm !important;
+            min-height: 54mm !important;
+            max-height: 54mm !important;
+            margin: 0 !important;
+            box-sizing: border-box;
+          }
+        }
+        ` : ''}
+        .barcode-2027 svg {
+          max-width: 100%;
+          height: auto;
+        }
       `}</style>
     </div>
   );
