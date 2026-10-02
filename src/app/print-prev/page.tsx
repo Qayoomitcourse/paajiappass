@@ -538,7 +538,8 @@ export default function PrintCardsPage() {
   const frontSideSlots = Array(6).fill(null).map((_, i) => employeesToPrint[i] || ({ _id: `ph-f-${i}` } as Employee));
   const arrangedBackSide = (() => {
     const result: (Employee | null)[] = Array(6).fill(null);
-    const positions = [1, 0, 3, 2, 5, 4]; // mirrored columns for double-sided printing
+    // Mirrored columns for double-sided printing: 2 columns (portrait) or 3 columns (2027 landscape)
+    const positions = isLandscape ? [2, 1, 0, 5, 4, 3] : [1, 0, 3, 2, 5, 4];
     employeesToPrint.forEach((employee, index) => { if(index < 6) result[positions[index]] = employee; });
     return result;
   })();
@@ -598,20 +599,37 @@ export default function PrintCardsPage() {
       <style jsx global>{`
         /* ... KEEP YOUR EXISTING PRINT CSS HERE (unchanged) ... */
 
-        /* --- 2027 landscape cards (86mm x 54mm), 2 columns x 3 rows per A4 page --- */
+        /* --- 2027 landscape cards (86mm x 54mm), 3 columns x 2 rows on A4 landscape --- */
         .print-page.landscape-cards {
           display: grid;
-          grid-template-columns: repeat(2, 86mm);
+          grid-template-columns: repeat(3, 86mm);
           grid-auto-rows: 54mm;
-          gap: 6mm 4mm;
+          gap: 8mm 5mm;
           justify-content: center;
-          align-content: start;
+          align-content: center;
         }
         .print-page.landscape-cards .print-card,
         .print-page.landscape-cards .print-card-placeholder {
           width: 86mm;
           height: 54mm;
         }
+        ${isLandscape ? `
+        @page { size: A4 landscape; margin: 0; }
+        @media print {
+          .print-page.landscape-cards {
+            width: 297mm;
+            height: 210mm;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            page-break-after: always;
+            break-after: page;
+          }
+          .print-page.landscape-cards.back-page {
+            page-break-after: auto;
+            break-after: auto;
+          }
+        }` : ''}
         .barcode-2027 svg { max-width: 100%; height: auto; }
       `}</style>
     </div>
