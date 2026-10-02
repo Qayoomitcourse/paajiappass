@@ -14,7 +14,7 @@ interface Employee {
   organization: string;
   cnic: string;
   dateOfExpiry: string;
-  dateOfIssue?: string | null; // NEW (2027 back side). Optional – blank line is printed if missing.
+  dateOfEntry?: string | null; // Date of Entry in the database = Date of Issue printed on the 2027 card back
   category: 'cargo' | 'landside';
   photo?: string | null;
   areaAllowed?: string[];
@@ -456,7 +456,7 @@ const IDCardBack_2027 = ({ employee }: { employee: Employee }) => {
             DATE OF ISSUE
           </span>
           <span className="font-black text-[9px] px-2 min-w-[22mm]">
-            {employee.dateOfIssue ? formatDateUpper(employee.dateOfIssue) : '\u00A0'}
+            {employee.dateOfEntry ? formatDateUpper(employee.dateOfEntry) : '\u00A0'}
           </span>
         </div>
       </div>
@@ -521,7 +521,8 @@ export default function PrintCardsPage() {
     setCategory(newCategory); setEmployeesToPrint([]); setError(null); setSuccessMessage(null); setPassIdsInput('');
   };
   
-  const availableYears = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() + i).toString());
+  // Fixed range so older passes (2025) can still be reprinted: 2025 to 2030
+  const availableYears = Array.from({ length: 6 }, (_, i) => (2025 + i).toString());
 
   // Pick the design by year: 2027+ yellow horizontal, 2026 green, 2025 and earlier blue
   const selectedYearNumber = parseInt(year, 10);
