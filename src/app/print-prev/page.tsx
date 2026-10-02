@@ -289,7 +289,7 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
 
 
 // --- DESIGN FOR 2027 AND LATER: YELLOW HORIZONTAL (NEW) ---
-// Landscape card, 86mm x 54mm. Works for both cargo and landside.
+// Landscape card, 3.370in x 2.125in (85.598mm x 53.975mm). Works for both cargo and landside.
 const YELLOW_2027 = '#ffd400';
 
 const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
@@ -538,7 +538,7 @@ export default function PrintCardsPage() {
   const frontSideSlots = Array(6).fill(null).map((_, i) => employeesToPrint[i] || ({ _id: `ph-f-${i}` } as Employee));
   const arrangedBackSide = (() => {
     const result: (Employee | null)[] = Array(6).fill(null);
-    // Mirrored columns for double-sided printing: 2 columns (portrait) or 3 columns (2027 landscape)
+    // Mirrored columns for double-sided printing: 2 columns (2027 horizontal and portrait)
     const positions = isLandscape ? [1, 0, 3, 2, 5, 4] : [1, 0, 3, 2, 5, 4];
     employeesToPrint.forEach((employee, index) => { if(index < 6) result[positions[index]] = employee; });
     return result;
@@ -613,16 +613,23 @@ export default function PrintCardsPage() {
 
         /* ============================================================
            2027 HORIZONTAL PASS
-           Exact card: 86mm x 54mm
-           Sheet: A4 Landscape = 297mm x 210mm
-           Layout: 2 columns x 3 rows
+           EXACT PASS SIZE:
+           3.370in horizontal x 2.125in vertical
+           = 85.598mm x 53.975mm
+
+           A4 LANDSCAPE:
+           297mm x 210mm
+
+           SHEET:
+           2 columns x 3 rows = 6 passes
            ============================================================ */
+
         .print-page.landscape-cards {
           width: 297mm;
           height: 210mm;
           display: grid;
-          grid-template-columns: repeat(2, 86mm);
-          grid-template-rows: repeat(3, 54mm);
+          grid-template-columns: repeat(2, 3.370in);
+          grid-template-rows: repeat(3, 2.125in);
           column-gap: 12mm;
           row-gap: 6mm;
           justify-content: center;
@@ -634,105 +641,163 @@ export default function PrintCardsPage() {
 
         .print-page.landscape-cards .print-card,
         .print-page.landscape-cards .print-card-placeholder {
-          width: 86mm !important;
-          height: 54mm !important;
-          min-width: 86mm;
-          max-width: 86mm;
-          min-height: 54mm;
-          max-height: 54mm;
-          margin: 0;
-          padding: 0;
+          width: 3.370in !important;
+          height: 2.125in !important;
+          min-width: 3.370in !important;
+          max-width: 3.370in !important;
+          min-height: 2.125in !important;
+          max-height: 2.125in !important;
+          margin: 0 !important;
+          padding: 0 !important;
           box-sizing: border-box;
           overflow: hidden;
         }
 
         .print-page.landscape-cards .print-card > div {
-          width: 86mm !important;
-          height: 54mm !important;
-          min-width: 86mm;
-          max-width: 86mm;
-          min-height: 54mm;
-          max-height: 54mm;
-          margin: 0;
+          width: 3.370in !important;
+          height: 2.125in !important;
+          min-width: 3.370in !important;
+          max-width: 3.370in !important;
+          min-height: 2.125in !important;
+          max-height: 2.125in !important;
+          margin: 0 !important;
           box-sizing: border-box;
         }
 
         ${isLandscape ? `
-        /* Browser print preview must use the physical A4 landscape sheet size. */
         @page {
           size: A4 landscape;
           margin: 0;
         }
 
         @media print {
+          /*
+           * PRINT ONLY:
+           * Hide the complete application/UI. Only .print-root is visible.
+           */
+          body * {
+            visibility: hidden !important;
+          }
+
+          .print-root,
+          .print-root * {
+            visibility: visible !important;
+          }
+
           html,
           body {
-            width: 297mm;
-            height: 210mm;
+            width: 297mm !important;
+            height: 210mm !important;
             margin: 0 !important;
             padding: 0 !important;
+            background: white !important;
           }
 
           body {
-            overflow: hidden;
+            overflow: hidden !important;
           }
 
           .no-print {
             display: none !important;
           }
 
-          .print-root,
+          .print-root {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+
           .print-area {
             width: 297mm !important;
             margin: 0 !important;
             padding: 0 !important;
           }
 
+          /*
+           * Page 1 = FRONT
+           * Page 2 = BACK
+           * Both pages use exactly the same physical card positions.
+           */
           .print-page.landscape-cards {
             width: 297mm !important;
             height: 210mm !important;
+
             display: grid !important;
-            grid-template-columns: repeat(2, 86mm) !important;
-            grid-template-rows: repeat(3, 54mm) !important;
+
+            grid-template-columns:
+              repeat(2, 3.370in) !important;
+
+            grid-template-rows:
+              repeat(3, 2.125in) !important;
+
             column-gap: 12mm !important;
             row-gap: 6mm !important;
+
             justify-content: center !important;
             align-content: center !important;
+
             margin: 0 !important;
             padding: 0 !important;
-            box-sizing: border-box;
-            page-break-after: always;
-            break-after: page;
+
+            box-sizing: border-box !important;
+
+            page-break-after: always !important;
+            break-after: page !important;
           }
 
           .print-page.landscape-cards.back-page {
-            page-break-after: auto;
-            break-after: auto;
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
 
           .print-page.landscape-cards .print-card,
           .print-page.landscape-cards .print-card-placeholder {
-            width: 86mm !important;
-            height: 54mm !important;
-            min-width: 86mm !important;
-            max-width: 86mm !important;
-            min-height: 54mm !important;
-            max-height: 54mm !important;
+            width: 3.370in !important;
+            height: 2.125in !important;
+
+            min-width: 3.370in !important;
+            max-width: 3.370in !important;
+
+            min-height: 2.125in !important;
+            max-height: 2.125in !important;
+
             margin: 0 !important;
             padding: 0 !important;
-            box-sizing: border-box;
-            overflow: hidden;
+
+            box-sizing: border-box !important;
+            overflow: hidden !important;
           }
 
           .print-page.landscape-cards .print-card > div {
-            width: 86mm !important;
-            height: 54mm !important;
-            min-width: 86mm !important;
-            max-width: 86mm !important;
-            min-height: 54mm !important;
-            max-height: 54mm !important;
+            width: 3.370in !important;
+            height: 2.125in !important;
+
+            min-width: 3.370in !important;
+            max-width: 3.370in !important;
+
+            min-height: 2.125in !important;
+            max-height: 2.125in !important;
+
             margin: 0 !important;
-            box-sizing: border-box;
+            box-sizing: border-box !important;
+          }
+
+          /*
+           * Prevent the browser from applying an automatic transform
+           * or scaling to the card itself.
+           */
+          .print-card {
+            transform: none !important;
+            zoom: 1 !important;
+          }
+
+          .barcode-2027 svg {
+            max-width: 100%;
+            height: auto;
           }
         }
         ` : ''}
