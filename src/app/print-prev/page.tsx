@@ -506,6 +506,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             alignItems: 'flex-end',
             justifyContent: 'space-between',
             gap: '8px',
+            flexShrink: 0,
             padding: '2px 0 5px',
           }}
         >
@@ -515,7 +516,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             <div style={{ fontSize: '6px', color: '#444444' }}>Joint Director Vigilance, PAA JIAP Karachi</div>
           </div>
           {/* QR code: bottom right, in place of the old VALID UPTO box */}
-          <div style={{ width: '30px', height: '30px', flexShrink: 0, marginRight: '4px' }}>
+          <div style={{ width: '20px', height: '20px', flexShrink: 0, marginRight: '4px' }}>
             <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
           </div>
         </div>
