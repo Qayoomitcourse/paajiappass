@@ -431,7 +431,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <div
               style={{
-                fontSize: '12.5px',
+                fontSize: '13.5px',
                 fontWeight: 800,
                 textTransform: 'uppercase',
                 lineHeight: 1.15,
@@ -452,9 +452,9 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               }}
             >
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, wordBreak: 'break-word' }}>{employee.designation}</div>
-                <div style={{ fontSize: '9.5px', color: '#444444', wordBreak: 'break-word' }}>{employee.organization}</div>
-                <div style={{ fontSize: '10px', fontFamily: 'monospace', fontWeight: 700, marginTop: '2px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, wordBreak: 'break-word' }}>{employee.designation}</div>
+                <div style={{ fontSize: '10.5px', color: '#333333', wordBreak: 'break-word' }}>{employee.organization}</div>
+                <div style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 700, marginTop: '2px' }}>
                   {employee.cnic}
                 </div>
                 <div style={{ marginTop: '4px' }}>
@@ -463,7 +463,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
                       display: 'inline-block',
                       backgroundColor: INK_2027,
                       color: YELLOW_2027,
-                      fontSize: '9.5px',
+                      fontSize: '10.5px',
                       fontWeight: 800,
                       padding: '1px 6px',
                       borderRadius: '3px',
