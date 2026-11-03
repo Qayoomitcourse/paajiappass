@@ -289,8 +289,10 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
 
 
 // --- DESIGN FOR 2027 AND LATER: YELLOW HORIZONTAL (UPDATED) ---
-// Standard PVC card (CR80 / ISO 7810 ID-1): 3.370in x 2.125in (85.598mm x 53.975mm), landscape. Works for both cargo and landside.
-// All sizes below are in px at 96dpi, so the card is 323.5px x 204px.
+// Card size: 3.370in wide (85.598mm) x 63.975mm tall, landscape.
+// Width is the standard CR80 width; height is the CR80 height (53.975mm) + 10mm (1cm) taller.
+// Works for both cargo and landside.
+// All sizes below are in px at 96dpi, so the card is about 323.5px x 241.8px.
 const YELLOW_2027 = '#ffd400';
 const INK_2027 = '#111111';
 
@@ -375,8 +377,8 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
           <div
             style={{
               boxSizing: 'border-box',
-              width: '78px',
-              height: '102px',
+              width: '92px', // was 78px (bigger photo)
+              height: '128px', // was 102px (bigger photo)
               flexShrink: 0,
               display: 'flex',
               flexDirection: 'column',
@@ -390,7 +392,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             <div
               style={{
                 boxSizing: 'border-box',
-                height: '13px',
+                height: '15px', // was 13px
                 flexShrink: 0,
                 backgroundColor: YELLOW_2027,
                 borderBottom: `1.5px solid ${INK_2027}`,
@@ -401,16 +403,16 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
                 lineHeight: 1,
               }}
             >
-              <span style={{ fontSize: '5px', fontWeight: 700, letterSpacing: '0.2em' }}>PASS NO.</span>
-              <span style={{ fontSize: '10px', fontWeight: 800 }}>{displayPassId}</span>
+              <span style={{ fontSize: '5.5px', fontWeight: 700, letterSpacing: '0.2em' }}>PASS NO.</span>
+              <span style={{ fontSize: '11px', fontWeight: 800 }}>{displayPassId}</span>
             </div>
             <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
               {employee.photo ? (
                 <Image
                   src={employee.photo}
                   alt={employee.name}
-                  width={74}
-                  height={85}
+                  width={88}
+                  height={113}
                   style={{
                     position: 'absolute',
                     inset: 0,
@@ -431,12 +433,12 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <div
               style={{
-                fontSize: '13.5px',
+                fontSize: '15px', // was 13.5px
                 fontWeight: 800,
                 textTransform: 'uppercase',
                 lineHeight: 1.15,
                 wordBreak: 'break-word',
-                marginBottom: '4px',
+                marginBottom: '6px', // was 4px
               }}
             >
               {employee.name}
@@ -452,18 +454,18 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               }}
             >
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, wordBreak: 'break-word' }}>{employee.designation}</div>
-                <div style={{ fontSize: '10.5px', color: '#333333', wordBreak: 'break-word' }}>{employee.organization}</div>
-                <div style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 700, marginTop: '2px' }}>
+                <div style={{ fontSize: '12.5px', fontWeight: 700, wordBreak: 'break-word' }}>{employee.designation}</div>
+                <div style={{ fontSize: '11.5px', color: '#333333', wordBreak: 'break-word' }}>{employee.organization}</div>
+                <div style={{ fontSize: '12.5px', fontFamily: 'monospace', fontWeight: 700, marginTop: '2px' }}>
                   {employee.cnic}
                 </div>
-                <div style={{ marginTop: '4px' }}>
+                <div style={{ marginTop: '6px' }}>
                   <span
                     style={{
                       display: 'inline-block',
                       backgroundColor: INK_2027,
                       color: YELLOW_2027,
-                      fontSize: '10.5px',
+                      fontSize: '12px', // was 10.5px
                       fontWeight: 800,
                       padding: '1px 6px',
                       borderRadius: '3px',
@@ -475,10 +477,10 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               </div>
               <div
                 style={{
-                  width: '62px',
-                  height: '62px',
+                  width: '50px', // was 62px (smaller QR)
+                  height: '50px', // was 62px (smaller QR)
                   flexShrink: 0,
-                  marginRight: '8px',
+                  marginRight: '4px', // was 8px
                 }}
               >
                 <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
@@ -635,8 +637,8 @@ const IDCardBack_2027 = ({ employee }: { employee: Employee }) => {
           </span>
         </div>
 
-        {/* Instructions */}
-        <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        {/* Instructions (slightly larger to use the extra card height) */}
+        <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
           {instructions.map((text, i) => (
             <div key={i} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
               <span
@@ -658,7 +660,7 @@ const IDCardBack_2027 = ({ employee }: { employee: Employee }) => {
               >
                 {i + 1}
               </span>
-              <span style={{ fontSize: '7px', lineHeight: '10px', fontWeight: 500 }}>{text}</span>
+              <span style={{ fontSize: '8px', lineHeight: '11.5px', fontWeight: 500 }}>{text}</span>
             </div>
           ))}
         </div>
@@ -863,15 +865,16 @@ export default function PrintCardsPage() {
 
         /* ============================================================
            2027 HORIZONTAL PASS
-           EXACT PASS SIZE:
-           3.370in horizontal x 2.125in vertical
-           = 85.598mm x 53.975mm
+           PASS SIZE:
+           3.370in horizontal (85.598mm) x 63.975mm vertical
+           (standard CR80 height 53.975mm + 10mm = 1cm taller)
 
            A4 LANDSCAPE:
            297mm x 210mm
 
            SHEET:
            2 columns x 3 rows = 6 passes
+           Height used: 3 x 63.975mm + 2 x 4mm gap = about 199.9mm
            ============================================================ */
 
         .print-page.landscape-cards {
@@ -879,9 +882,9 @@ export default function PrintCardsPage() {
           height: 210mm;
           display: grid;
           grid-template-columns: repeat(2, 3.370in);
-          grid-template-rows: repeat(3, 2.125in);
+          grid-template-rows: repeat(3, 63.975mm);
           column-gap: 12mm;
-          row-gap: 6mm;
+          row-gap: 4mm;
           justify-content: center;
           align-content: center;
           margin: 0 auto;
@@ -892,11 +895,11 @@ export default function PrintCardsPage() {
         .print-page.landscape-cards .print-card,
         .print-page.landscape-cards .print-card-placeholder {
           width: 3.370in !important;
-          height: 2.125in !important;
+          height: 63.975mm !important;
           min-width: 3.370in !important;
           max-width: 3.370in !important;
-          min-height: 2.125in !important;
-          max-height: 2.125in !important;
+          min-height: 63.975mm !important;
+          max-height: 63.975mm !important;
           margin: 0 !important;
           padding: 0 !important;
           box-sizing: border-box;
@@ -905,11 +908,11 @@ export default function PrintCardsPage() {
 
         .print-page.landscape-cards .print-card > div {
           width: 3.370in !important;
-          height: 2.125in !important;
+          height: 63.975mm !important;
           min-width: 3.370in !important;
           max-width: 3.370in !important;
-          min-height: 2.125in !important;
-          max-height: 2.125in !important;
+          min-height: 63.975mm !important;
+          max-height: 63.975mm !important;
           margin: 0 !important;
           box-sizing: border-box;
         }
@@ -982,10 +985,10 @@ export default function PrintCardsPage() {
               repeat(2, 3.370in) !important;
 
             grid-template-rows:
-              repeat(3, 2.125in) !important;
+              repeat(3, 63.975mm) !important;
 
             column-gap: 12mm !important;
-            row-gap: 6mm !important;
+            row-gap: 4mm !important;
 
             justify-content: center !important;
             align-content: center !important;
@@ -1007,13 +1010,13 @@ export default function PrintCardsPage() {
           .print-page.landscape-cards .print-card,
           .print-page.landscape-cards .print-card-placeholder {
             width: 3.370in !important;
-            height: 2.125in !important;
+            height: 63.975mm !important;
 
             min-width: 3.370in !important;
             max-width: 3.370in !important;
 
-            min-height: 2.125in !important;
-            max-height: 2.125in !important;
+            min-height: 63.975mm !important;
+            max-height: 63.975mm !important;
 
             margin: 0 !important;
             padding: 0 !important;
@@ -1024,13 +1027,13 @@ export default function PrintCardsPage() {
 
           .print-page.landscape-cards .print-card > div {
             width: 3.370in !important;
-            height: 2.125in !important;
+            height: 63.975mm !important;
 
             min-width: 3.370in !important;
             max-width: 3.370in !important;
 
-            min-height: 2.125in !important;
-            max-height: 2.125in !important;
+            min-height: 63.975mm !important;
+            max-height: 63.975mm !important;
 
             margin: 0 !important;
             box-sizing: border-box !important;
