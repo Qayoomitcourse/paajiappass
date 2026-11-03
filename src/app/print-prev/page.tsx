@@ -462,7 +462,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             </div>
 
             {/* Area allowed + Valid upto on the same row (wraps if the area is long) */}
-            <div style={{ marginTop: 'auto', paddingTop: '6px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+            <div style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
               <span
                 style={{
                   display: 'inline-block',
@@ -508,7 +508,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             justifyContent: 'space-between',
             gap: '8px',
             flexShrink: 0,
-            padding: '2px 74px 5px 0',
+            padding: '2px 62px 5px 0',
           }}
         >
           <div style={{ flex: 1, lineHeight: 1.15 }}>
@@ -518,7 +518,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
           </div>
           {/* QR code: fixed position measured from the card itself (top-right), in the marked area:
               right of the validity box, close to the right wall, ending above the yellow footer */}
-          <div style={{ position: 'absolute', top: '148px', right: '4px', width: '66px', height: '66px' }}>
+          <div style={{ position: 'absolute', top: '164px', right: '6px', width: '54px', height: '54px' }}>
             <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
           </div>
         </div>
