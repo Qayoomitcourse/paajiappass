@@ -447,8 +447,6 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               style={{
                 display: 'flex',
                 gap: '6px',
-                flex: 1,
-                minHeight: 0,
                 justifyContent: 'space-between',
                 alignItems: 'flex-start',
               }}
@@ -459,32 +457,38 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
                 <div style={{ fontSize: '12.5px', fontFamily: 'monospace', fontWeight: 700, marginTop: '2px' }}>
                   {employee.cnic}
                 </div>
-                <div style={{ marginTop: '6px' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      backgroundColor: INK_2027,
-                      color: YELLOW_2027,
-                      fontSize: '12px', // was 10.5px
-                      fontWeight: 800,
-                      padding: '1px 6px',
-                      borderRadius: '3px',
-                    }}
-                  >
-                    {employee.areaAllowed?.join(' | ') || 'N/A'}
-                  </span>
-                </div>
               </div>
+              {/* QR code: smaller, in front (to the right) of designation / organization / CNIC */}
               <div
                 style={{
-                  width: '50px', // was 62px (smaller QR)
-                  height: '50px', // was 62px (smaller QR)
+                  width: '40px',
+                  height: '40px',
                   flexShrink: 0,
-                  marginRight: '4px', // was 8px
+                  marginRight: '0px',
                 }}
               >
                 <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
               </div>
+            </div>
+
+            {/* Area: now sits below the QR row, so it can expand to the right up to the card edge */}
+            <div style={{ marginTop: '6px' }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  boxSizing: 'border-box',
+                  maxWidth: '100%',
+                  backgroundColor: INK_2027,
+                  color: YELLOW_2027,
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  padding: '2px 7px',
+                  borderRadius: '3px',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {employee.areaAllowed?.join(' | ') || 'N/A'}
+              </span>
             </div>
           </div>
         </div>
