@@ -289,7 +289,7 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
 
 
 // --- DESIGN FOR 2027 AND LATER: YELLOW HORIZONTAL (UPDATED) ---
-// Landscape card, 3.370in x 2.125in (85.598mm x 53.975mm). Works for both cargo and landside.
+// Standard PVC card (CR80 / ISO 7810 ID-1): 3.370in x 2.125in (85.598mm x 53.975mm), landscape. Works for both cargo and landside.
 // All sizes below are in px at 96dpi, so the card is 323.5px x 204px.
 const YELLOW_2027 = '#ffd400';
 const INK_2027 = '#111111';
@@ -300,7 +300,7 @@ const cardShell2027: React.CSSProperties = {
   height: '100%',
   boxSizing: 'border-box',
   border: `2px solid ${INK_2027}`,
-  borderRadius: '8px',
+  borderRadius: '12px', // CR80 standard corner radius: 3.18mm (0.125in)
   background: '#ffffff',
   overflow: 'hidden',
   display: 'flex',
