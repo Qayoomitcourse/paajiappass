@@ -353,7 +353,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               textAlignLast: 'justify',
             }}
           >
-            AFU FUNCTIONARY PASS
+            {employee.category === 'landside' ? 'LANDSIDE PASS' : 'AFU FUNCTIONARY PASS'}
           </div>
         </div>
         <div
@@ -449,7 +449,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
           <div style={{ gridColumn: '2 / 4', gridRow: '1', alignSelf: 'start', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <div
               style={{
-                fontSize: '15px', // was 13.5px
+                fontSize: employee.name.length > 38 ? '13px' : '15px', // was 13.5px
                 fontWeight: 800,
                 textTransform: 'uppercase',
                 lineHeight: 1.15,
@@ -526,7 +526,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
           <div
             style={{
               gridColumn: '3',
-              gridRow: '2 / 4',
+              gridRow: '1 / 4',
               alignSelf: 'end',
               justifySelf: 'end',
               marginBottom: '5px',
