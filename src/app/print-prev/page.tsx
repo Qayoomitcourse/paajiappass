@@ -461,10 +461,10 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               {/* QR code: smaller, in front (to the right) of designation / organization / CNIC */}
               <div
                 style={{
-                  width: '40px',
-                  height: '40px',
+                  width: '30px',
+                  height: '30px',
                   flexShrink: 0,
-                  marginRight: '0px',
+                  marginRight: '6px',
                 }}
               >
                 <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
