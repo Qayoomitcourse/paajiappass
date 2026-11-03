@@ -475,14 +475,10 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               </div>
               <div
                 style={{
-                  boxSizing: 'border-box',
-                  width: '64px',
-                  height: '64px',
+                  width: '62px',
+                  height: '62px',
                   flexShrink: 0,
-                  backgroundColor: '#ffffff',
-                  border: `1.5px solid ${INK_2027}`,
-                  borderRadius: '4px',
-                  padding: '3px',
+                  marginRight: '8px',
                 }}
               >
                 <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
