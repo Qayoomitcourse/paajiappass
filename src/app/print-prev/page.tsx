@@ -288,9 +288,27 @@ const IDCardBack_2026 = ({ employee }: { employee: Employee }) => {
 };
 
 
-// --- DESIGN FOR 2027 AND LATER: YELLOW HORIZONTAL (NEW) ---
+// --- DESIGN FOR 2027 AND LATER: YELLOW HORIZONTAL (UPDATED) ---
 // Landscape card, 3.370in x 2.125in (85.598mm x 53.975mm). Works for both cargo and landside.
+// All sizes below are in px at 96dpi, so the card is 323.5px x 204px.
 const YELLOW_2027 = '#ffd400';
+const INK_2027 = '#111111';
+
+// Shared outer shell for front and back (white inside, black outline, rounded corners)
+const cardShell2027: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  boxSizing: 'border-box',
+  border: `2px solid ${INK_2027}`,
+  borderRadius: '8px',
+  background: '#ffffff',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  fontFamily: 'Arial, sans-serif',
+  color: INK_2027,
+  lineHeight: 1.2,
+};
 
 const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
   const displayPassId = formatDisplayPassId(employee.passId);
@@ -299,31 +317,74 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
   const headingText = employee.category === 'landside' ? 'JIAP KARACHI' : 'CARGO COMPLEX JIAP';
 
   return (
-    <div
-      className="w-full h-full bg-white flex flex-col overflow-hidden"
-      style={{ fontFamily: 'Arial, sans-serif', border: '2px solid black', borderRadius: '6px', color: '#000' }}
-    >
-      {/* Header */}
+    <div style={cardShell2027}>
+      {/* Header: title, subtitle stretched to the title width, year badge */}
       <div
-        className="flex items-end justify-between px-2 py-0.5"
-        style={{ backgroundColor: YELLOW_2027, borderBottom: '3px solid black' }}
+        style={{
+          boxSizing: 'border-box',
+          height: '41px',
+          flexShrink: 0,
+          backgroundColor: YELLOW_2027,
+          borderBottom: `3px solid ${INK_2027}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 8px',
+        }}
       >
-        <div className="leading-none">
-          <p className="font-black text-[17px] tracking-wide leading-none">{headingText}</p>
-          <p className="font-bold text-[7px] mt-0.5" style={{ letterSpacing: '0.18em' }}>
+        <div style={{ display: 'inline-block', lineHeight: 1 }}>
+          <div style={{ fontSize: '15.5px', fontWeight: 800, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+            {headingText}
+          </div>
+          {/* width:0 + minWidth:100% = subtitle never widens the title block, it justifies to the title width */}
+          <div
+            style={{
+              width: 0,
+              minWidth: '100%',
+              marginTop: '3px',
+              fontSize: '9.5px',
+              fontWeight: 700,
+              letterSpacing: '0.34em',
+              whiteSpace: 'nowrap',
+              textAlign: 'justify',
+              textAlignLast: 'justify',
+            }}
+          >
             AFU FUNCTIONARY PASS
-          </p>
+          </div>
         </div>
-        <p className="font-black text-[24px] leading-none">{functionaryYear}</p>
+        <div
+          style={{
+            backgroundColor: INK_2027,
+            color: YELLOW_2027,
+            fontSize: '17px',
+            fontWeight: 800,
+            padding: '3px 8px',
+            borderRadius: '4px',
+            lineHeight: 1,
+          }}
+        >
+          {functionaryYear}
+        </div>
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col px-2 pt-1.5 min-h-0">
-        <div className="flex gap-2 flex-1 min-h-0">
-          {/* Photo */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 8px 0', minHeight: 0 }}>
+        <div style={{ display: 'flex', gap: '8px', flex: 1, minHeight: 0 }}>
+          {/* Photo with yellow pass number strip on top */}
           <div
-            className="shrink-0 border border-gray-300 overflow-hidden"
-            style={{ width: '22mm', height: '26mm', backgroundColor: '#e5e5e5' }}
+            style={{
+              position: 'relative',
+              boxSizing: 'border-box',
+              width: '83px',
+              height: '98px',
+              flexShrink: 0,
+              border: `2px solid ${INK_2027}`,
+              borderRadius: '4px',
+              backgroundColor: '#d9d9d9',
+              overflow: 'hidden',
+              boxShadow: `2px 2px 0 ${YELLOW_2027}`,
+            }}
           >
             {employee.photo ? (
               <Image
@@ -331,62 +392,142 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
                 alt={employee.name}
                 width={83}
                 height={98}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               />
             ) : (
-              <div className="text-[8px] text-center p-1">NO PHOTO</div>
+              <div style={{ fontSize: '8px', textAlign: 'center', padding: '20px 4px 4px' }}>NO PHOTO</div>
             )}
-          </div>
-
-          {/* Details */}
-          <div className="flex-1 min-w-0 flex flex-col leading-tight">
-            <p className="font-black text-[12px] leading-tight break-words">{employee.name}</p>
-            <p className="text-[8.5px] leading-tight break-words">{employee.designation}</p>
-            <p className="text-[8.5px] leading-tight break-words">{employee.organization}</p>
-            <p className="text-[8.5px] leading-tight">{employee.cnic}</p>
-            <div className="mt-auto">
-              <span
-                className="inline-block font-black text-[9px] px-1"
-                style={{ backgroundColor: YELLOW_2027, border: '1.5px solid black' }}
-              >
-                {employee.areaAllowed?.join(' | ') || 'N/A'}
-              </span>
-            </div>
-          </div>
-
-          {/* Valid upto + QR */}
-          <div className="shrink-0 flex flex-col items-center gap-1" style={{ width: '17mm' }}>
             <div
-              className="w-full text-center leading-none py-0.5"
-              style={{ backgroundColor: YELLOW_2027, border: '1.5px solid black' }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 0,
+                boxSizing: 'border-box',
+                backgroundColor: YELLOW_2027,
+                borderBottom: `1.5px solid ${INK_2027}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '2px 4px',
+                lineHeight: 1,
+              }}
             >
-              <p className="font-bold text-[5.5px]" style={{ letterSpacing: '0.2em' }}>VALID UPTO</p>
-              <p className="font-black text-[8px] whitespace-nowrap">{formatDateUpper(employee.dateOfExpiry)}</p>
+              <span style={{ fontSize: '5px', fontWeight: 700, letterSpacing: '0.2em' }}>PASS NO.</span>
+              <span style={{ fontSize: '11px', fontWeight: 800 }}>{displayPassId}</span>
             </div>
-            <div style={{ width: '17mm', height: '17mm' }}>
-              <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%' }} />
+          </div>
+
+          {/* Name (full width, wraps if long) and details beside the QR code */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            <div
+              style={{
+                fontSize: '12.5px',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                lineHeight: 1.15,
+                wordBreak: 'break-word',
+                marginBottom: '4px',
+              }}
+            >
+              {employee.name}
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                gap: '6px',
+                flex: 1,
+                minHeight: 0,
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, wordBreak: 'break-word' }}>{employee.designation}</div>
+                <div style={{ fontSize: '9.5px', color: '#444444', wordBreak: 'break-word' }}>{employee.organization}</div>
+                <div style={{ fontSize: '10px', fontFamily: 'monospace', fontWeight: 700, marginTop: '2px' }}>
+                  {employee.cnic}
+                </div>
+                <div style={{ marginTop: '4px' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      backgroundColor: INK_2027,
+                      color: YELLOW_2027,
+                      fontSize: '9.5px',
+                      fontWeight: 800,
+                      padding: '1px 6px',
+                      borderRadius: '3px',
+                    }}
+                  >
+                    {employee.areaAllowed?.join(' | ') || 'N/A'}
+                  </span>
+                </div>
+              </div>
+              <div
+                style={{
+                  boxSizing: 'border-box',
+                  width: '64px',
+                  height: '64px',
+                  flexShrink: 0,
+                  backgroundColor: '#ffffff',
+                  border: `1.5px solid ${INK_2027}`,
+                  borderRadius: '4px',
+                  padding: '3px',
+                }}
+              >
+                <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Signature + Pass No */}
-        <div className="flex items-end justify-between gap-2 pb-1 pt-0.5">
-          <div className="flex-1 leading-tight">
-            <div style={{ borderTop: '1px solid black', height: '10px' }} />
-            <p className="font-bold text-[6.5px]">Signature of Issuing Officer</p>
-            <p className="text-[6.5px]">Joint Director Vigilance, PAA JIAP Karachi</p>
+        {/* Signature + valid upto (small, horizontal, yellow) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '2px 0 5px',
+          }}
+        >
+          <div style={{ flex: 1, lineHeight: 1.15 }}>
+            <div style={{ borderTop: `1px solid ${INK_2027}`, height: '10px' }} />
+            <div style={{ fontSize: '6.5px', fontWeight: 700 }}>Signature of Issuing Officer</div>
+            <div style={{ fontSize: '6px', color: '#444444' }}>Joint Director Vigilance, PAA JIAP Karachi</div>
           </div>
-          <div className="text-center leading-none px-2 py-0.5" style={{ border: '1.5px solid black' }}>
-            <p className="font-bold text-[5.5px]" style={{ letterSpacing: '0.2em' }}>PASS NO.</p>
-            <p className="font-black text-[14px]">{displayPassId}</p>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: YELLOW_2027,
+              border: `1px solid ${INK_2027}`,
+              borderRadius: '3px',
+              padding: '2px 5px',
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ fontSize: '5px', fontWeight: 700, letterSpacing: '0.16em' }}>VALID UPTO</span>
+            <span style={{ width: '1px', height: '8px', backgroundColor: INK_2027 }} />
+            <span style={{ fontSize: '9px', fontWeight: 800 }}>{formatDateUpper(employee.dateOfExpiry)}</span>
           </div>
         </div>
       </div>
 
       {/* Footer */}
       <div
-        className="text-center font-bold text-[6.5px] py-0.5"
-        style={{ backgroundColor: YELLOW_2027, borderTop: '3px solid black' }}
+        style={{
+          flexShrink: 0,
+          backgroundColor: YELLOW_2027,
+          borderTop: `3px solid ${INK_2027}`,
+          textAlign: 'center',
+          fontSize: '6.5px',
+          fontWeight: 700,
+          padding: '3px 0',
+        }}
       >
         Pakistan Airports Authority · Vigilance Branch · JIAP Karachi
       </div>
@@ -406,56 +547,151 @@ const IDCardBack_2027 = ({ employee }: { employee: Employee }) => {
   ];
 
   return (
-    <div
-      className="w-full h-full bg-white flex flex-col overflow-hidden"
-      style={{ fontFamily: 'Arial, sans-serif', border: '2px solid black', borderRadius: '6px', color: '#000' }}
-    >
+    <div style={cardShell2027}>
       {/* Header */}
       <div
-        className="flex items-center justify-between px-2 py-0.5"
-        style={{ backgroundColor: YELLOW_2027, borderBottom: '3px solid black' }}
+        style={{
+          boxSizing: 'border-box',
+          height: '29px',
+          flexShrink: 0,
+          backgroundColor: YELLOW_2027,
+          borderBottom: `3px solid ${INK_2027}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 8px',
+        }}
       >
-        <p className="font-black text-[13px]" style={{ letterSpacing: '0.12em' }}>INSTRUCTIONS</p>
-        <p className="font-black text-[9px] px-1.5" style={{ backgroundColor: 'black', color: YELLOW_2027 }}>
+        <div style={{ fontSize: '13px', fontWeight: 800, letterSpacing: '0.22em' }}>INSTRUCTIONS</div>
+        <div
+          style={{
+            backgroundColor: INK_2027,
+            color: YELLOW_2027,
+            fontSize: '10px',
+            fontWeight: 800,
+            padding: '2px 7px',
+            borderRadius: '3px',
+            lineHeight: 1,
+          }}
+        >
           {functionaryYear}
-        </p>
+        </div>
       </div>
 
-      <div className="flex-1 flex flex-col px-2 pt-1 min-h-0">
-        {/* Barcode */}
-        <div className="barcode-2027 w-full flex flex-col items-center overflow-hidden">
-          <Barcode value={barcodeData} width={0.5} height={22} format="CODE128" displayValue={false} margin={0} />
-          <p className="text-[5.5px] leading-none mt-0.5 font-mono">{barcodeData}</p>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '5px 8px 0', minHeight: 0 }}>
+        {/* Barcode panel with larger readable text */}
+        <div
+          className="barcode-2027"
+          style={{
+            boxSizing: 'border-box',
+            width: '100%',
+            backgroundColor: '#ffffff',
+            border: `1px solid ${INK_2027}`,
+            borderRadius: '4px',
+            padding: '2px 4px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          <Barcode value={barcodeData} width={0.5} height={19} format="CODE128" displayValue={false} margin={0} />
+          <div
+            style={{
+              maxWidth: '100%',
+              fontSize: '7.5px',
+              fontFamily: 'monospace',
+              fontWeight: 700,
+              lineHeight: 1,
+              marginTop: '2px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {barcodeData}
+          </div>
         </div>
 
         {/* Notice */}
-        <div className="mt-1">
-          <span className="inline-block font-bold text-[7px] px-1.5 py-0.5" style={{ backgroundColor: 'black', color: YELLOW_2027 }}>
+        <div style={{ marginTop: '4px' }}>
+          <span
+            style={{
+              display: 'inline-block',
+              backgroundColor: INK_2027,
+              color: YELLOW_2027,
+              borderRadius: '3px',
+              fontSize: '7.5px',
+              fontWeight: 700,
+              padding: '2px 7px',
+            }}
+          >
             Pass holder is not PAA/Govt employee
           </span>
         </div>
 
         {/* Instructions */}
-        <div className="mt-1 space-y-[2px]">
+        <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
           {instructions.map((text, i) => (
-            <div key={i} className="flex items-start gap-1.5">
+            <div key={i} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
               <span
-                className="shrink-0 font-black text-[6.5px] w-[10px] h-[10px] flex items-center justify-center"
-                style={{ backgroundColor: YELLOW_2027 }}
+                style={{
+                  boxSizing: 'border-box',
+                  width: '10px',
+                  height: '10px',
+                  flexShrink: 0,
+                  borderRadius: '3px',
+                  backgroundColor: YELLOW_2027,
+                  border: `1px solid ${INK_2027}`,
+                  fontSize: '6px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}
               >
                 {i + 1}
               </span>
-              <p className="text-[6.5px] leading-[10px]">{text}</p>
+              <span style={{ fontSize: '7px', lineHeight: '10px', fontWeight: 500 }}>{text}</span>
             </div>
           ))}
         </div>
 
-        {/* Date of issue */}
-        <div className="mt-auto mb-1 flex items-stretch w-fit" style={{ border: '1.5px solid ' + YELLOW_2027 }}>
-          <span className="font-black text-[6.5px] px-1.5 flex items-center" style={{ backgroundColor: YELLOW_2027, letterSpacing: '0.1em' }}>
+        {/* Date of issue (Date of Entry from the database) */}
+        <div
+          style={{
+            marginTop: 'auto',
+            marginBottom: '4px',
+            display: 'flex',
+            width: 'fit-content',
+            border: `1.5px solid ${INK_2027}`,
+            borderRadius: '4px',
+            overflow: 'hidden',
+          }}
+        >
+          <span
+            style={{
+              backgroundColor: YELLOW_2027,
+              fontSize: '6.5px',
+              fontWeight: 800,
+              letterSpacing: '0.12em',
+              padding: '0 6px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
             DATE OF ISSUE
           </span>
-          <span className="font-black text-[9px] px-2 min-w-[22mm]">
+          <span
+            style={{
+              backgroundColor: '#ffffff',
+              fontSize: '9px',
+              fontWeight: 800,
+              padding: '1px 8px',
+              minWidth: '70px',
+            }}
+          >
             {employee.dateOfEntry ? formatDateUpper(employee.dateOfEntry) : '\u00A0'}
           </span>
         </div>
@@ -463,16 +699,25 @@ const IDCardBack_2027 = ({ employee }: { employee: Employee }) => {
 
       {/* Footer */}
       <div
-        className="flex items-center justify-between px-2 py-0.5"
-        style={{ backgroundColor: YELLOW_2027, borderTop: '3px solid black' }}
+        style={{
+          flexShrink: 0,
+          backgroundColor: YELLOW_2027,
+          borderTop: `3px solid ${INK_2027}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '3px 8px',
+        }}
       >
-        <div className="leading-tight">
-          <p className="font-bold text-[5.5px]" style={{ letterSpacing: '0.12em' }}>FOUND THIS PASS? REPORT IMMEDIATELY TO</p>
-          <p className="font-black text-[8px]">Vigilance Branch, JIAP Karachi</p>
+        <div style={{ lineHeight: 1.2 }}>
+          <div style={{ fontSize: '5.5px', fontWeight: 700, letterSpacing: '0.14em' }}>
+            FOUND THIS PASS? REPORT IMMEDIATELY TO
+          </div>
+          <div style={{ fontSize: '8px', fontWeight: 800 }}>Vigilance Branch, JIAP Karachi</div>
         </div>
-        <div className="text-right leading-tight font-mono font-bold text-[7.5px]">
-          <p>021-99071420</p>
-          <p>021-99071468</p>
+        <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '7.5px', fontWeight: 700, lineHeight: 1.2 }}>
+          <div>021-99071420</div>
+          <div>021-99071468</div>
         </div>
       </div>
     </div>
