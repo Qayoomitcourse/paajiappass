@@ -300,6 +300,7 @@ const INK_2027 = '#111111';
 const cardShell2027: React.CSSProperties = {
   width: '100%',
   height: '100%',
+  position: 'relative',
   boxSizing: 'border-box',
   border: `2px solid ${INK_2027}`,
   borderRadius: '12px', // CR80 standard corner radius: 3.18mm (0.125in)
@@ -371,7 +372,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
       </div>
 
       {/* Body */}
-      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 8px 0', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 8px 0', minHeight: 0 }}>
         <div style={{ display: 'flex', gap: '8px', flex: 1, minHeight: 0 }}>
           {/* Photo frame: yellow pass number strip ABOVE the picture, so the full photo (head included) stays visible */}
           <div
@@ -461,7 +462,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             </div>
 
             {/* Area allowed + Valid upto on the same row (wraps if the area is long) */}
-            <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+            <div style={{ marginTop: 'auto', paddingTop: '6px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
               <span
                 style={{
                   display: 'inline-block',
@@ -507,7 +508,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             justifyContent: 'space-between',
             gap: '8px',
             flexShrink: 0,
-            padding: '2px 58px 5px 0',
+            padding: '2px 74px 5px 0',
           }}
         >
           <div style={{ flex: 1, lineHeight: 1.15 }}>
@@ -515,8 +516,9 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             <div style={{ fontSize: '6.5px', fontWeight: 700 }}>Signature of Issuing Officer</div>
             <div style={{ fontSize: '6px', color: '#444444' }}>Joint Director Vigilance, PAA JIAP Karachi</div>
           </div>
-          {/* QR code: starts to the right of the validity box, reaches the right edge and runs down to the bottom */}
-          <div style={{ position: 'absolute', right: '8px', bottom: '5px', width: '46px', height: '46px' }}>
+          {/* QR code: fixed position measured from the card itself (top-right), in the marked area:
+              right of the validity box, close to the right wall, ending above the yellow footer */}
+          <div style={{ position: 'absolute', top: '148px', right: '4px', width: '66px', height: '66px' }}>
             <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
           </div>
         </div>
