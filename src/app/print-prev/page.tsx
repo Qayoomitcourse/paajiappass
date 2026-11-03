@@ -458,21 +458,10 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
                   {employee.cnic}
                 </div>
               </div>
-              {/* QR code: smaller, in front (to the right) of designation / organization / CNIC */}
-              <div
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  flexShrink: 0,
-                  marginRight: '6px',
-                }}
-              >
-                <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
-              </div>
             </div>
 
-            {/* Area: now sits below the QR row, so it can expand to the right up to the card edge */}
-            <div style={{ marginTop: '6px' }}>
+            {/* Area allowed + Valid upto on the same row (wraps if the area is long) */}
+            <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
               <span
                 style={{
                   display: 'inline-block',
@@ -489,6 +478,23 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               >
                 {employee.areaAllowed?.join(' | ') || 'N/A'}
               </span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  backgroundColor: YELLOW_2027,
+                  border: `1px solid ${INK_2027}`,
+                  borderRadius: '3px',
+                  padding: '2px 5px',
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{ fontSize: '5.5px', fontWeight: 700, letterSpacing: '0.16em' }}>VALID UPTO</span>
+                <span style={{ width: '1px', height: '9px', backgroundColor: INK_2027 }} />
+                <span style={{ fontSize: '10px', fontWeight: 800 }}>{formatDateUpper(employee.dateOfExpiry)}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -508,22 +514,9 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             <div style={{ fontSize: '6.5px', fontWeight: 700 }}>Signature of Issuing Officer</div>
             <div style={{ fontSize: '6px', color: '#444444' }}>Joint Director Vigilance, PAA JIAP Karachi</div>
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              backgroundColor: YELLOW_2027,
-              border: `1px solid ${INK_2027}`,
-              borderRadius: '3px',
-              padding: '2px 5px',
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span style={{ fontSize: '5px', fontWeight: 700, letterSpacing: '0.16em' }}>VALID UPTO</span>
-            <span style={{ width: '1px', height: '8px', backgroundColor: INK_2027 }} />
-            <span style={{ fontSize: '9px', fontWeight: 800 }}>{formatDateUpper(employee.dateOfExpiry)}</span>
+          {/* QR code: bottom right, in place of the old VALID UPTO box */}
+          <div style={{ width: '30px', height: '30px', flexShrink: 0, marginRight: '4px' }}>
+            <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
           </div>
         </div>
       </div>
