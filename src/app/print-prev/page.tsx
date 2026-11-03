@@ -371,7 +371,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 8px 0', minHeight: 0 }}>
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 8px 0', minHeight: 0 }}>
         <div style={{ display: 'flex', gap: '8px', flex: 1, minHeight: 0 }}>
           {/* Photo frame: yellow pass number strip ABOVE the picture, so the full photo (head included) stays visible */}
           <div
@@ -507,7 +507,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             justifyContent: 'space-between',
             gap: '8px',
             flexShrink: 0,
-            padding: '2px 0 5px',
+            padding: '2px 58px 5px 0',
           }}
         >
           <div style={{ flex: 1, lineHeight: 1.15 }}>
@@ -515,8 +515,8 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
             <div style={{ fontSize: '6.5px', fontWeight: 700 }}>Signature of Issuing Officer</div>
             <div style={{ fontSize: '6px', color: '#444444' }}>Joint Director Vigilance, PAA JIAP Karachi</div>
           </div>
-          {/* QR code: bottom right, in place of the old VALID UPTO box */}
-          <div style={{ width: '20px', height: '20px', flexShrink: 0, marginRight: '4px' }}>
+          {/* QR code: starts to the right of the validity box, reaches the right edge and runs down to the bottom */}
+          <div style={{ position: 'absolute', right: '8px', bottom: '5px', width: '46px', height: '46px' }}>
             <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
           </div>
         </div>
