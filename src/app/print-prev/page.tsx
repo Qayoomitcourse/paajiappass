@@ -371,14 +371,15 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
       {/* Body */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 8px 0', minHeight: 0 }}>
         <div style={{ display: 'flex', gap: '8px', flex: 1, minHeight: 0 }}>
-          {/* Photo with yellow pass number strip on top */}
+          {/* Photo frame: yellow pass number strip ABOVE the picture, so the full photo (head included) stays visible */}
           <div
             style={{
-              position: 'relative',
               boxSizing: 'border-box',
-              width: '83px',
-              height: '98px',
+              width: '78px',
+              height: '102px',
               flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
               border: `2px solid ${INK_2027}`,
               borderRadius: '4px',
               backgroundColor: '#d9d9d9',
@@ -386,35 +387,43 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
               boxShadow: `2px 2px 0 ${YELLOW_2027}`,
             }}
           >
-            {employee.photo ? (
-              <Image
-                src={employee.photo}
-                alt={employee.name}
-                width={83}
-                height={98}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-            ) : (
-              <div style={{ fontSize: '8px', textAlign: 'center', padding: '20px 4px 4px' }}>NO PHOTO</div>
-            )}
             <div
               style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                top: 0,
                 boxSizing: 'border-box',
+                height: '13px',
+                flexShrink: 0,
                 backgroundColor: YELLOW_2027,
                 borderBottom: `1.5px solid ${INK_2027}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '2px 4px',
+                padding: '0 4px',
                 lineHeight: 1,
               }}
             >
               <span style={{ fontSize: '5px', fontWeight: 700, letterSpacing: '0.2em' }}>PASS NO.</span>
-              <span style={{ fontSize: '11px', fontWeight: 800 }}>{displayPassId}</span>
+              <span style={{ fontSize: '10px', fontWeight: 800 }}>{displayPassId}</span>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+              {employee.photo ? (
+                <Image
+                  src={employee.photo}
+                  alt={employee.name}
+                  width={74}
+                  height={85}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: 'center top',
+                    display: 'block',
+                  }}
+                />
+              ) : (
+                <div style={{ fontSize: '8px', textAlign: 'center', padding: '20px 4px 4px' }}>NO PHOTO</div>
+              )}
             </div>
           </div>
 
