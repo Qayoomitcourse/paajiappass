@@ -372,12 +372,27 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '6px 8px 0', minHeight: 0 }}>
-        <div style={{ display: 'flex', gap: '8px', flex: 1, minHeight: 0 }}>
+      {/* Body is a grid: [photo | info | QR column]. Rows: info / spacer / signature.
+          The QR lives in the right column and spans the lower two rows, so it can never leave the card. */}
+      <div
+        style={{
+          flex: 1,
+          display: 'grid',
+          gridTemplateColumns: '92px minmax(0, 1fr) 54px',
+          gridTemplateRows: 'auto 1fr auto',
+          columnGap: '8px',
+          padding: '6px 8px 0',
+          minHeight: 0,
+        }}
+      >
+        <div style={{ display: 'contents' }}>
           {/* Photo frame: yellow pass number strip ABOVE the picture, so the full photo (head included) stays visible */}
           <div
             style={{
               boxSizing: 'border-box',
+              gridColumn: '1',
+              gridRow: '1 / 3',
+              alignSelf: 'start',
               width: '92px', // was 78px (bigger photo)
               height: '128px', // was 102px (bigger photo)
               flexShrink: 0,
@@ -431,7 +446,7 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
           </div>
 
           {/* Name (full width, wraps if long) and details beside the QR code */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ gridColumn: '2 / 4', gridRow: '1', alignSelf: 'start', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <div
               style={{
                 fontSize: '15px', // was 13.5px
@@ -501,25 +516,26 @@ const IDCardFront_2027 = ({ employee }: { employee: Employee }) => {
         </div>
 
         {/* Signature + valid upto (small, horizontal, yellow) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            gap: '8px',
-            flexShrink: 0,
-            padding: '2px 62px 5px 0',
-          }}
-        >
-          <div style={{ flex: 1, lineHeight: 1.15 }}>
+        <div style={{ display: 'contents' }}>
+          <div style={{ gridColumn: '1 / 3', gridRow: '3', alignSelf: 'end', padding: '2px 0 5px', lineHeight: 1.15 }}>
             <div style={{ borderTop: `1px solid ${INK_2027}`, height: '10px' }} />
             <div style={{ fontSize: '6.5px', fontWeight: 700 }}>Signature of Issuing Officer</div>
             <div style={{ fontSize: '6px', color: '#444444' }}>Joint Director Vigilance, PAA JIAP Karachi</div>
           </div>
-          {/* QR code: fixed position measured from the card itself (top-right), in the marked area:
-              right of the validity box, close to the right wall, ending above the yellow footer */}
-          <div style={{ position: 'absolute', top: '164px', right: '6px', width: '54px', height: '54px' }}>
-            <QRCodeSVG value={qrCodeUrl} size={80} style={{ width: '100%', height: '100%', display: 'block' }} />
+          {/* QR code: last grid column, spans the lower rows, bottom-right, ends level with the signature block */}
+          <div
+            style={{
+              gridColumn: '3',
+              gridRow: '2 / 4',
+              alignSelf: 'end',
+              justifySelf: 'end',
+              marginBottom: '5px',
+              width: '54px',
+              height: '54px',
+              overflow: 'hidden',
+            }}
+          >
+            <QRCodeSVG value={qrCodeUrl} size={54} style={{ width: '54px', height: '54px', display: 'block' }} />
           </div>
         </div>
       </div>
